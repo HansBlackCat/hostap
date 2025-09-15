@@ -229,6 +229,9 @@ struct wpa_group {
 	/* Number of references except those in struct wpa_group->next */
 	unsigned int references;
 	unsigned int num_setup_iface;
+
+    int GN_grk, GM_grk;
+    u8 GRK[2][WPA_GRK_MAX_LEN];
 };
 
 

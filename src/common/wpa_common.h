@@ -22,6 +22,7 @@
 #define WPA_KEY_RSC_LEN 8
 #define WPA_GMK_LEN 32
 #define WPA_GTK_MAX_LEN 32
+#define WPA_GRK_MAX_LEN 32
 #define WPA_PASN_PMK_LEN 32
 #define WPA_PASN_MAX_MIC_LEN 24
 #define WPA_MAX_RSNXE_LEN 4
