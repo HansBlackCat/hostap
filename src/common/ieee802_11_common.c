@@ -212,6 +212,16 @@ static int ieee802_11_parse_vendor_specific(const u8 *pos, size_t elen,
 		}
 		break;
 
+#ifdef CUSTOM_GRK
+    case OUI_CUSTOM_GRK:
+        // Example OUI for Custom GRK: 02:7A:8B
+        wpa_printf(MSG_DEBUG, "Custom GRK vendor specific IE found (len=%lu)",
+                (unsigned long) elen);
+        elems->custom_grk = pos;
+        elems->custom_grk_len = elen;
+        break;
+#endif /* CUSTOM_GRK */
+
 	default:
 		wpa_printf(MSG_EXCESSIVE, "unknown vendor specific "
 			   "information element ignored (vendor OUI "
