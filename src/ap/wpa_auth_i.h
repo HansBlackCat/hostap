@@ -230,8 +230,10 @@ struct wpa_group {
 	unsigned int references;
 	unsigned int num_setup_iface;
 
+#ifdef CUSTOM_GRK
     int GN_grk, GM_grk;
     u8 GRK[2][WPA_GRK_MAX_LEN];
+#endif /* CUSTOM_GRK */
 };
 
 

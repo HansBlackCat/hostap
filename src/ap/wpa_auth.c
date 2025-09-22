@@ -5739,8 +5739,10 @@ static void wpa_group_gtk_init(struct wpa_authenticator *wpa_auth,
 	group->GM_igtk = 5;
 	group->GN_bigtk = 6;
 	group->GM_bigtk = 7;
+#ifdef CUSTOM_GRK
     group->GN_grk = 8;
     group->GM_grk = 9;
+#endif /* CUSTOM_GRK */
 	/* GTK[GN] = CalcGTK() */
 	wpa_gtk_update(wpa_auth, group);
 }
