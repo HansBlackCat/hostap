@@ -212,15 +212,15 @@ static int ieee802_11_parse_vendor_specific(const u8 *pos, size_t elen,
 		}
 		break;
 
-#ifdef CUSTOM_GRK
-    case OUI_CUSTOM_GRK:
-        // Example OUI for Custom GRK: 02:7A:8B
-        wpa_printf(MSG_DEBUG, "Custom GRK vendor specific IE found (len=%lu)",
+#ifdef CUSTOM_RK
+    case OUI_CUSTOM_RK:
+        // Example OUI for Custom RK: 02:7A:8B
+        wpa_printf(MSG_DEBUG, "Custom RK vendor specific IE found (len=%lu)",
                 (unsigned long) elen);
-        elems->custom_grk = pos;
-        elems->custom_grk_len = elen;
+        // Handle the Custom RK IE as needed
+
         break;
-#endif /* CUSTOM_GRK */
+#endif /* CUSTOM_RK */
 
 	default:
 		wpa_printf(MSG_EXCESSIVE, "unknown vendor specific "
