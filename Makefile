@@ -1,5 +1,8 @@
 SUBDIRS=$(wildcard hostapd) $(wildcard wpa_supplicant)
 
+CFLAGS += -DCUSTOM_RK
+export CFLAGS
+
 all:
 	for dir in $(SUBDIRS); do $(MAKE) -C $$dir; done
 

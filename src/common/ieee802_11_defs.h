@@ -1460,6 +1460,11 @@ struct ieee80211_ampe_ie {
 
 #define OUI_MICROSOFT 0x0050f2 /* Microsoft (also used in Wi-Fi specs)
 				* 00:50:F2 */
+
+#ifdef CUSTOM_RK
+    #define OUI_CUSTOM_RK 0x027a8b
+#endif /* CUSTOM_RK */
+
 #define WPA_IE_VENDOR_TYPE 0x0050f201
 #define WMM_IE_VENDOR_TYPE 0x0050f202
 #define WPS_IE_VENDOR_TYPE 0x0050f204

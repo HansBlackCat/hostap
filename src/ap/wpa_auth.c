@@ -5705,18 +5705,18 @@ static int wpa_gtk_update(struct wpa_authenticator *wpa_auth,
 	wpa_hexdump_key(MSG_DEBUG, "BIGTK",
 			group->BIGTK[group->GN_bigtk - 6], len);
 
-#ifdef CUSTOM_GRK
-    /* GRK derivation */
+#ifdef CUSTOM_RK
+    /* RK derivation */
     len = wpa_cipher_key_len(conf->group_mgmt_cipher);
     os_memcpy(group->GNonce, group->Counter, WPA_NONCE_LEN);
     inc_byte_array(group->Counter, WPA_NONCE_LEN);
-    if (wpa_gmk_to_gtk(group->GMK, "GRK key expansion",
+    if (wpa_gmk_to_gtk(group->GMK, "RK key expansion",
                wpa_auth->addr, group->GNonce,
-               group->GRK[group->GN_grk - 8], len) < 0)
+               group->RK[group->GN_rk - 8], len) < 0)
         return -1;
-    wpa_hexdump_key(MSG_DEBUG, "GRK",
-            group->GRK[group->GN_grk - 8], len);
-#endif /* CUSTOM_GRK */
+    wpa_hexdump_key(MSG_DEBUG, "RK",
+            group->RK[group->GN_rk - 8], len);
+#endif /* CUSTOM_RK */
 
 	return ret;
 }
@@ -5739,10 +5739,10 @@ static void wpa_group_gtk_init(struct wpa_authenticator *wpa_auth,
 	group->GM_igtk = 5;
 	group->GN_bigtk = 6;
 	group->GM_bigtk = 7;
-#ifdef CUSTOM_GRK
-    group->GN_grk = 8;
-    group->GM_grk = 9;
-#endif /* CUSTOM_GRK */
+#ifdef CUSTOM_RK
+    group->GN_rk = 8;
+    group->GM_rk = 9;
+#endif /* CUSTOM_RK */
 	/* GTK[GN] = CalcGTK() */
 	wpa_gtk_update(wpa_auth, group);
 }
