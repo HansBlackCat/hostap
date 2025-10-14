@@ -1,0 +1,96 @@
+services:
+    testbed_ap:
+        build:
+            context: ..
+            dockerfile: local_testbed/ap/Dockerfile
+        image: testbed-ap:latest
+        container_name: testbed_ap
+        hostname: testbed-ap
+        privileged: true
+        cap_add:
+            - NET_ADMIN
+            - NET_RAW
+            - SYS_MODULE
+        network_mode: "none"
+        environment:
+            - DEBIAN_FRONTEND=noninteractive
+            - WIRELESS_INTERFACE=wlan1
+            - SSID=TestbedAP
+            - PASSPHRASE=testbed2024
+            - CHANNEL=6
+            - IP_RANGE=192.168.100.0/24
+            - DHCP_START=192.168.100.10
+            - DHCP_END=192.168.100.100
+        volumes:
+            - ./ap/config:/etc/wireless
+            - ./captures:/captures
+            - ./ap/scripts:/scripts
+            - /lib/modules:/lib/modules:ro
+            - /sys/class/ieee80211:/sys/class/ieee80211
+            - /sys/kernel/debug:/sys/kernel/debug
+        command: /scripts/start-ap.sh
+        stdin_open: true
+        tty: true
+
+    testbed_sta:
+        build:
+            context: ..
+            dockerfile: local_testbed/client/Dockerfile
+        image: testbed-sta:latest
+        container_name: testbed_sta
+        hostname: testbed-sta
+        privileged: true
+        cap_add:
+            - NET_ADMIN
+            - NET_RAW
+            - SYS_MODULE
+        network_mode: "none"
+        environment:
+            - DEBIAN_FRONTEND=noninteractive
+            - WIRELESS_INTERFACE=wlan0
+            - AP_SSID=TestbedAP
+            - AP_PASSWORD=testbed2024
+        volumes:
+            - ./client/config:/etc/wireless
+            - ./client/scripts:/scripts
+            - ./captures:/captures
+            - /lib/modules:/lib/modules:ro
+            - /sys/class/ieee80211:/sys/class/ieee80211
+            - /sys/kernel/debug:/sys/kernel/debug
+        command: /scripts/start-client.sh
+        stdin_open: true
+        tty: true
+        depends_on:
+            - testbed_ap
+
+    testbed_capture:
+        build:
+            context: ..
+            dockerfile: local_testbed/monitor/Dockerfile
+        image: testbed-capture:latest
+        container_name: testbed_capture
+        hostname: testbed-capture
+        privileged: true
+        cap_add:
+            - NET_ADMIN
+            - NET_RAW
+            - SYS_MODULE
+        network_mode: "none"
+        environment:
+            - DEBIAN_FRONTEND=noninteractive
+            - MONITOR_INTERFACE=wlan2
+            - CAPTURE_CHANNEL=6
+        volumes:
+            - ./captures:/captures
+            - ./monitor/scripts:/scripts
+            - /lib/modules:/lib/modules:ro
+            - /sys/class/ieee80211:/sys/class/ieee80211
+            - /sys/kernel/debug:/sys/kernel/debug
+        command: /scripts/start-monitor.sh
+        stdin_open: true
+        tty: true
+        depends_on:
+            - testbed_sta
+
+volumes:
+    captures:
