@@ -30,7 +30,7 @@ Reusable vendor IE framework with build, parse, and update capabilities. Ready f
 
 ---
 
-### Feature 6: Vendor IE Integration into Probe Requests
+### Feature 2: Vendor IE Integration into Probe Requests
 
 **Modified Files:**
 - `wpa_supplicant/scan.c`
@@ -62,7 +62,7 @@ Every probe request frame sent by wpa_supplicant now includes the custom vendor 
 
 ---
 
-### Feature 7: Vendor IE Integration into Association Requests
+### Feature 3: Vendor IE Integration into Association Requests
 
 **Modified Files:**
 - `wpa_supplicant/sme.c`
@@ -97,7 +97,7 @@ Every association request frame sent by wpa_supplicant now includes the custom v
 
 ---
 
-### Feature 8: Build System Integration
+### Feature 4: Build System Integration
 
 **Modified Files:**
 - `wpa_supplicant/Makefile`
@@ -110,15 +110,5 @@ Integrate vendor_ie_custom.c into the wpa_supplicant build process to compile an
 
 **Result:**
 vendor_ie_custom.c successfully compiles and links with wpa_supplicant. Custom vendor IE functionality is now part of the built binary.
-
----
-
-### Known Limitations
-
-**EAPOL Frame Capture:**
-- **Issue:** EAPOL frames (4-way handshake) cannot be captured via tcpdump/monitor interfaces
-- **Cause:** mac80211_hwsim processes EAPOL frames internally in kernel space
-- **Workaround:** EAPOL handshake completion can be verified through hostapd logs (EAPOL-4WAY-HS-COMPLETED)
-- **Impact:** WPA handshake works correctly, but cannot be captured in pcap files for analysis
 
 ---
