@@ -67,6 +67,23 @@ static int add_buf_data(struct wpabuf **dst, const u8 *data, size_t len)
 	return 0;
 }
 
+// #ifdef CUSTOM_RK
+// static void custom_rk_beacon_function(struct hostapd_data *hapd, u8 *eid, size_t len) {
+//     if (len < 2 + 4)
+//         return;
+
+//     *eid++ = WLAN_EID_VENDOR_SPECIFIC;
+//     *eid++ = 4;
+//     *eid++ = 0x02; // OUI 0x02718b
+//     *eid++ = 0x71;
+//     *eid++ = 0x8b;
+//     *eid++ = 0xff; // OUI Type    
+//     WPA_PUT_LE16(eid, 0x1234); // RK value
+//     eid += 2;
+//     WPA_PUT_LE32(eid, 0xdeadbeef); // RK value
+//     eid += 4;
+// }
+// #endif /* CUSTOM_RK */
 
 int hostapd_build_ap_extra_ies(struct hostapd_data *hapd,
 			       struct wpabuf **beacon_ret,
@@ -205,6 +222,13 @@ int hostapd_build_ap_extra_ies(struct hostapd_data *hapd,
 	    add_buf_data(&proberesp, buf, pos - buf) < 0)
 		goto fail;
 #endif /* CONFIG_OWE */
+
+// #ifdef CUSTOM_RK
+//     pos = buf;
+//     custom_rk_beacon_function(hapd, pos, sizeof(buf));
+//     if (add_buf_data(&beacon, buf, pos - buf) < 0)
+//         goto fail;
+// #endif /* CUSTOM_RK */
 
 	add_buf(&beacon, hapd->conf->vendor_elements);
 	add_buf(&proberesp, hapd->conf->vendor_elements);
