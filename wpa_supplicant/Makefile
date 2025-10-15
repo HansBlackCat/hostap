@@ -50,6 +50,9 @@ CFLAGS += $(EXTRA_CFLAGS)
 CFLAGS += -I$(abspath ../src)
 CFLAGS += -I$(abspath ../src/utils)
 
+CFLAGS += -DCUSTOM_RK
+export CFLAGS
+
 ifndef CONFIG_NO_GITVER
 # Add VERSION_STR postfix for builds from a git repository
 ifeq ($(wildcard ../.git),../.git)

@@ -25,6 +25,9 @@ CFLAGS += $(EXTRA_CFLAGS)
 CFLAGS += -I$(abspath ../src)
 CFLAGS += -I$(abspath ../src/utils)
 
+CFLAGS += -DCUSTOM_RK
+export CFLAGS
+
 export BINDIR ?= /usr/local/bin/
 
 ifndef CONFIG_NO_GITVER
