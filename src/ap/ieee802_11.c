@@ -60,6 +60,9 @@
 #include "nan_usd_ap.h"
 #include "pasn/pasn_common.h"
 
+#ifdef CUSTOM_RK
+#include "wpa_auth_i.h" 
+#endif
 
 #ifdef CONFIG_FILS
 static struct wpabuf *
@@ -4767,6 +4770,42 @@ skip_wpa_ies:
 		hostapd_wfa_capab(hapd, sta, elems->wfa_capab,
 				  elems->wfa_capab + elems->wfa_capab_len);
 
+#ifdef CUSTOM_RK
+	/* Parse custom vendor specific IE from Association Request */
+	if (sta->wpa_sm && !link) {
+		const u8 *custom_ie;
+		u32 vendor_type = OUI_CUSTOM_RK;  /* OUI: 0x027a8b, Type: 0xff */
+
+		custom_ie = get_vendor_ie(ies, ies_len, vendor_type);
+		if (custom_ie) {
+			/* IE format: ID(1) + Length(1) + OUI(3) + Type(1) + Data(variable) */
+			u8 ie_len = custom_ie[1];
+
+			if (ie_len >= 5) {  /* At least OUI(3) + Type(1) + Data(1) */
+				const u8 *data = custom_ie + 2 + 4;  /* Skip ID(1), Length(1), OUI(3), Type(1) */
+				size_t data_len = ie_len - 4;  /* Subtract OUI(3) + Type(1) */
+
+				/* Store the payload in wpa_state_machine */
+				if (data_len <= WPA_CLIENT_HASH_SECRET) {
+					os_memcpy(sta->wpa_sm->client_hash_secret, data, data_len);
+					sta->wpa_sm->client_hash_secret_len = data_len;
+
+					wpa_printf(MSG_DEBUG, "Custom Vendor IE: Stored %zu bytes from " MACSTR,
+						   data_len, MAC2STR(sta->addr));
+					wpa_hexdump(MSG_DEBUG, "Custom Vendor IE payload",
+						    sta->wpa_sm->client_hash_secret,
+						    sta->wpa_sm->client_hash_secret_len);
+				} else {
+					wpa_printf(MSG_WARNING, "Custom Vendor IE: Data too large (%zu bytes, max %d)",
+						   data_len, WPA_CLIENT_HASH_SECRET);
+				}
+			} else {
+				wpa_printf(MSG_DEBUG, "Custom Vendor IE: Invalid length %u", ie_len);
+			}
+		}
+	}
+#endif /* CUSTOM_RK */
+
 	return WLAN_STATUS_SUCCESS;
 }
 
@@ -5509,6 +5548,53 @@ rsnxe_done:
 			  wpabuf_len(hapd->conf->assocresp_elements));
 		p += wpabuf_len(hapd->conf->assocresp_elements);
 	}
+
+    wpa_printf(MSG_DEBUG, "Startomg CUSTOM_RK");
+#ifdef CUSTOM_RK
+	/* Echo client vendor specific IE with incremented payload */
+	wpa_printf(MSG_DEBUG, "Custom Vendor IE: send_assoc_resp called (sta=%p, status=%u)",
+		   sta, status_code);
+
+	if (sta) {
+		wpa_printf(MSG_DEBUG, "Custom Vendor IE: sta->wpa_sm=%p", sta->wpa_sm);
+		if (sta->wpa_sm) {
+			wpa_printf(MSG_DEBUG, "Custom Vendor IE: client_hash_secret_len=%zu",
+				   sta->wpa_sm->client_hash_secret_len);
+		}
+	}
+
+	if (sta && sta->wpa_sm && sta->wpa_sm->client_hash_secret_len > 0 &&
+	    status_code == WLAN_STATUS_SUCCESS) {
+		u8 incremented_payload[WPA_CLIENT_HASH_SECRET];
+		size_t i;
+
+		wpa_printf(MSG_DEBUG, "Custom Vendor IE: All conditions met, processing echo");
+		wpa_hexdump(MSG_DEBUG, "Custom Vendor IE: Original data from state machine",
+			    sta->wpa_sm->client_hash_secret, sta->wpa_sm->client_hash_secret_len);
+
+		/* Increment each byte by 1 */
+		for (i = 0; i < sta->wpa_sm->client_hash_secret_len; i++) {
+			incremented_payload[i] = sta->wpa_sm->client_hash_secret[i] + 1;
+		}
+
+		/* Add vendor specific IE */
+		*p++ = WLAN_EID_VENDOR_SPECIFIC;  /* Element ID: 221 */
+		*p++ = 4 + sta->wpa_sm->client_hash_secret_len;  /* Length: OUI(3) + Type(1) + Data */
+		*p++ = 0x02;  /* OUI byte 1 */
+		*p++ = 0x7a;  /* OUI byte 2 */
+		*p++ = 0x8b;  /* OUI byte 3 */
+		*p++ = 0xff;  /* Type */
+		os_memcpy(p, incremented_payload, sta->wpa_sm->client_hash_secret_len);
+		p += sta->wpa_sm->client_hash_secret_len;
+
+		wpa_printf(MSG_DEBUG, "Custom Vendor IE: Sent %zu bytes (incremented) to " MACSTR,
+			   sta->wpa_sm->client_hash_secret_len, MAC2STR(sta->addr));
+		wpa_hexdump(MSG_DEBUG, "Custom Vendor IE: Response payload",
+			    incremented_payload, sta->wpa_sm->client_hash_secret_len);
+	} else {
+		wpa_printf(MSG_DEBUG, "Custom Vendor IE: Conditions not met, skipping echo");
+	}
+#endif /* CUSTOM_RK */
 
 	send_len += p - reply->u.assoc_resp.variable;
 

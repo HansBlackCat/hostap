@@ -39,6 +39,13 @@ struct wpa_state_machine {
 		WPA_PTK_GROUP_KEYERROR
 	} wpa_ptk_group_state;
 
+#ifdef CUSTOM_RK
+    u8 client_hash_secret[WPA_CLIENT_HASH_SECRET];
+    u8 rk[WPA_RK_MAX_LEN];
+    size_t rk_len;
+    size_t client_hash_secret_len;
+#endif /* CUSTOM_RK */
+
 	bool Init;
 	bool DeauthenticationRequest;
 	bool AuthenticationRequest;

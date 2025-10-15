@@ -112,3 +112,88 @@ Integrate vendor_ie_custom.c into the wpa_supplicant build process to compile an
 vendor_ie_custom.c successfully compiles and links with wpa_supplicant. Custom vendor IE functionality is now part of the built binary.
 
 ---
+
+### Feature 5: AP-Side Vendor IE Parsing and Storage
+
+**Modified Files:**
+- `src/ap/ieee802_11.c`
+
+**Modified Functions:**
+- `__check_assoc_ies()` (lines 4770-4804): Added custom vendor IE parsing from Association Request
+
+**Code Changes:**
+```c
+#ifdef CUSTOM_RK
+	/* Parse custom vendor specific IE from Association Request */
+	if (sta->wpa_sm && !link) {
+		const u8 *custom_ie;
+		u32 vendor_type = 0x027a8bff;  /* OUI: 0x027a8b, Type: 0xff */
+
+		custom_ie = get_vendor_ie(ies, ies_len, vendor_type);
+		if (custom_ie) {
+			u8 ie_len = custom_ie[1];
+			if (ie_len >= 5) {  /* At least OUI(3) + Type(1) + Data(1) */
+				const u8 *data = custom_ie + 2 + 4;
+				size_t data_len = ie_len - 4;
+
+				/* Store the payload in wpa_state_machine */
+				if (data_len <= WPA_CLIENT_HASH_SECRET) {
+					os_memcpy(sta->wpa_sm->client_hash_secret, data, data_len);
+					sta->wpa_sm->client_hash_secret_len = data_len;
+					wpa_printf(MSG_DEBUG, "Custom Vendor IE: Stored %zu bytes from " MACSTR,
+						   data_len, MAC2STR(sta->addr));
+					wpa_hexdump(MSG_DEBUG, "Custom Vendor IE payload",
+						    sta->wpa_sm->client_hash_secret,
+						    sta->wpa_sm->client_hash_secret_len);
+				}
+			}
+		}
+	}
+#endif /* CUSTOM_RK */
+```
+
+**Reason:**
+Extract custom vendor IE payload from client Association Requests and store it in the wpa_state_machine for use in future protocol calculations. Enables AP to receive and process client-specific data sent in vendor IE (OUI 0x027a8b, Type 0xff).
+
+**Result:**
+AP successfully parses Association Request vendor IEs and stores payload in `wpa_state_machine->client_hash_secret`. Debug logs confirm payload reception with hexdump output. Completes bidirectional custom vendor IE exchange between STA and AP.
+
+---
+
+### Feature 6: AP Custom Vendor IE in Association Response
+
+**Modified Files:**
+- `src/ap/ieee802_11.c`
+
+**Modified Functions:**
+- `send_assoc_resp()` (lines 5541-5566): Added custom vendor IE to Association Response
+
+**Code Changes:**
+```c
+#ifdef CUSTOM_RK
+	/* Add custom vendor specific IE to Association Response */
+	if (sta && sta->wpa_sm && status_code == WLAN_STATUS_SUCCESS &&
+	    sta->wpa_sm->client_hash_secret_len > 0) {
+		size_t vendor_ie_len = 2 + 4 + sta->wpa_sm->client_hash_secret_len;
+
+		if ((size_t)(buf + buflen - p) >= vendor_ie_len) {
+			*p++ = WLAN_EID_VENDOR_SPECIFIC;  /* 0xDD */
+			*p++ = 4 + sta->wpa_sm->client_hash_secret_len;  /* OUI(3) + Type(1) + Data */
+			*p++ = 0x02; *p++ = 0x7a; *p++ = 0x8b;  /* OUI: 0x027a8b */
+			*p++ = 0xff;  /* Type */
+			os_memcpy(p, sta->wpa_sm->client_hash_secret, sta->wpa_sm->client_hash_secret_len);
+			p += sta->wpa_sm->client_hash_secret_len;
+			wpa_printf(MSG_DEBUG, "Custom Vendor IE: Added %zu bytes to Association Response for " MACSTR,
+				   sta->wpa_sm->client_hash_secret_len, MAC2STR(sta->addr));
+		}
+	}
+#endif /* CUSTOM_RK */
+```
+
+**Reason:**
+Echo back the client_hash_secret received from STA's Association Request in the AP's Association Response. This enables bidirectional vendor-specific data exchange and allows the client to verify that the AP received and processed its custom vendor IE correctly.
+
+**Result:**
+AP successfully includes custom vendor IE (OUI 0x027a8b, Type 0xff) in Association Response, echoing the exact payload received from the client. Debug logs confirm successful transmission with hexdump. Completes the full handshake: STA sends vendor IE in AssocReq → AP stores it → AP echoes it back in AssocResp.
+
+---
