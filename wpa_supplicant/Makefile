@@ -1795,6 +1795,7 @@ endif
 
 OBJS += ../src/common/ieee802_11_common.o
 OBJS += ../src/common/hw_features_common.o
+OBJS += vendor_ie_custom.o
 
 ifdef NEED_EAP_COMMON
 OBJS += ../src/eap_common/eap_common.o

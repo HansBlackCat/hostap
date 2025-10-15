@@ -3998,6 +3998,21 @@ static u8 * wpas_populate_assoc_ies(
 		}
 	}
 
+#ifdef CUSTOM_RK
+    if (wpa_ie_len + 8 > max_wpa_ie_len) {
+        wpa_printf(MSG_ERROR, "Failed to add RK element");
+    } else { // wpa_ie_len + 8 <= max_wpa_ie_len
+        u8 *pos = wpa_ie + wpa_ie_len; // End position of current IE buffer
+        *pos++ = WLAN_EID_VENDOR_SPECIFIC; // Element ID: 0xdd
+        *pos++ = 4; // Length: 4 bytes
+        *pos++ = 0x02; // OUI[0]
+        *pos++ = 0x7a; // OUI[1]
+        *pos++ = 0x8b; // OUI[2]
+        *pos++ = 0xff; // OUI Subtype: 0xff
+        wpa_ie_len += 6;
+    }
+#endif /* CUSTOM_RK */
+
 #ifdef CONFIG_FST
 	if (wpa_s->fst_ies) {
 		int fst_ies_len = wpabuf_len(wpa_s->fst_ies);

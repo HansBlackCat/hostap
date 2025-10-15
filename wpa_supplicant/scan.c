@@ -23,6 +23,7 @@
 #include "bss.h"
 #include "scan.h"
 #include "mesh.h"
+#include "vendor_ie_custom.h"
 
 static struct wpabuf * wpa_supplicant_extra_ies(struct wpa_supplicant *wpa_s);
 
@@ -816,6 +817,19 @@ static struct wpabuf * wpa_supplicant_extra_ies(struct wpa_supplicant *wpa_s)
 	if (wpabuf_resize(&extra_ie, 12) == 0)
 		wpas_mbo_scan_ie(wpa_s, extra_ie);
 #endif /* CONFIG_MBO */
+
+	/* Add custom vendor specific IE */
+	{
+		struct wpabuf *custom_ie = build_custom_vendor_ie();
+		if (custom_ie) {
+			if (wpa_s->drv_max_probe_req_ie_len >= wpabuf_len(custom_ie) &&
+			    wpabuf_resize(&extra_ie, wpabuf_len(custom_ie)) == 0) {
+				wpabuf_put_buf(extra_ie, custom_ie);
+				wpa_printf(MSG_DEBUG, "Added custom vendor IE to Probe Request");
+			}
+			wpabuf_free(custom_ie);
+		}
+	}
 
 	if (wpa_s->vendor_elem[VENDOR_ELEM_PROBE_REQ]) {
 		struct wpabuf *buf = wpa_s->vendor_elem[VENDOR_ELEM_PROBE_REQ];

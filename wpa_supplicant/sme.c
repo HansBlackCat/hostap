@@ -32,6 +32,7 @@
 #include "scan.h"
 #include "sme.h"
 #include "hs20_supplicant.h"
+#include "vendor_ie_custom.h"
 
 #define SME_AUTH_TIMEOUT 5
 #define SME_ASSOC_TIMEOUT 5
@@ -2536,6 +2537,25 @@ mscs_fail:
 		pos += 4;
 		*pos = variant;
 		wpa_s->sme.assoc_req_ie_len += 2 + 4 + 1;
+	}
+
+	/* Add custom vendor specific IE to Association Request */
+	{
+		struct wpabuf *custom_ie = build_custom_vendor_ie();
+		if (custom_ie) {
+			size_t custom_ie_len = wpabuf_len(custom_ie);
+			if (wpa_s->sme.assoc_req_ie_len + custom_ie_len <=
+			    sizeof(wpa_s->sme.assoc_req_ie)) {
+				os_memcpy(wpa_s->sme.assoc_req_ie + wpa_s->sme.assoc_req_ie_len,
+					  wpabuf_head(custom_ie), custom_ie_len);
+				wpa_s->sme.assoc_req_ie_len += custom_ie_len;
+				wpa_printf(MSG_DEBUG, "Added custom vendor IE to Association Request");
+			} else {
+				wpa_printf(MSG_WARNING,
+					   "Not enough room for custom vendor IE in assoc_req_ie");
+			}
+			wpabuf_free(custom_ie);
+		}
 	}
 
 	params.bssid = bssid;
