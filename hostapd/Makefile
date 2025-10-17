@@ -166,6 +166,8 @@ OBJS += ../src/utils/crc32.o
 OBJS += ../src/common/ieee802_11_common.o
 OBJS += ../src/common/wpa_common.o
 OBJS += ../src/common/hw_features_common.o
+OBJS += ../src/common/resumption_ticket.o
+OBJS += ../src/common/vendor_ie_custom.o
 
 OBJS += ../src/eapol_auth/eapol_auth_sm.o
 

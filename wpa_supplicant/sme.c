@@ -32,7 +32,7 @@
 #include "scan.h"
 #include "sme.h"
 #include "hs20_supplicant.h"
-#include "vendor_ie_custom.h"
+#include "common/vendor_ie_custom.h"
 
 #define SME_AUTH_TIMEOUT 5
 #define SME_ASSOC_TIMEOUT 5

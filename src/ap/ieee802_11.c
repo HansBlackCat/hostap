@@ -5867,6 +5867,39 @@ static void handle_assoc(struct hostapd_data *hapd,
 
 	sta = ap_get_sta(hapd, mgmt->sa);
 
+#ifdef CUSTOM_RK
+    wpa_printf(MSG_DEBUG, "CUSTOM_RK defined - here is for processing association");
+// If proper tivket given, then AP should be answer
+#ifndef CUSTOM_RK_NO_VERBOSE
+    wpa_printf(MSG_DEBUG, "Starting CUSTOM_RK processing");
+    // Debug print all innate date in sta_sm structure
+    if (sta) {
+        wpa_printf(MSG_DEBUG, "Custom RK: Station info:");
+        wpa_printf(MSG_DEBUG, "Custom RK: sta->addr=" MACSTR, MAC2STR(sta->addr));
+        wpa_printf(MSG_DEBUG, "Custom RK: sta->aid=%d", sta->aid);
+        wpa_printf(MSG_DEBUG, "Custom RK: sta->flags=0x%x", sta->flags);
+        wpa_printf(MSG_DEBUG, "Custom RK: sta->auth_alg=%d", sta->auth_alg);
+        wpa_printf(MSG_DEBUG, "Custom RK: sta->capability=0x%x", sta->capability);
+        wpa_printf(MSG_DEBUG, "Custom RK: sta->listen_interval=%d", sta->listen_interval);
+        wpa_printf(MSG_DEBUG, "Custom RK: sta->supported_rates_len=%d", sta->supported_rates_len);
+        wpa_printf(MSG_DEBUG, "Custom RK: sta->last_seq_ctrl=0x%x", sta->last_seq_ctrl);
+        wpa_printf(MSG_DEBUG, "Custom RK: sta->last_subtype=0x%x", sta->last_subtype);
+        wpa_printf(MSG_DEBUG, "Custom RK: sta->added_unassoc=%d", sta->added_unassoc);
+        wpa_printf(MSG_DEBUG, "Custom RK: sta->wpa_sm=%p", sta->wpa_sm);
+        if (sta->wpa_sm) {
+            wpa_printf(MSG_DEBUG, "Custom RK: sta->wpa_sm->client_hash_secret_len=%zu",
+                       sta->wpa_sm->client_hash_secret_len);
+            wpa_hexdump(MSG_DEBUG, "Custom RK: sta->wpa_sm->client_hash_secret",
+                        sta->wpa_sm->client_hash_secret, sta->wpa_sm->client_hash_secret_len);
+        }
+    } else {
+        wpa_printf(MSG_DEBUG, "Custom RK: No sta information available");
+    }
+#endif /* CUSTOM_RK_NO_VERBOSE */
+
+
+#endif /* CUSTOM_RK */
+    
 #ifdef CONFIG_IEEE80211BE
 	/*
 	 * It is possible that the association frame is from an associated

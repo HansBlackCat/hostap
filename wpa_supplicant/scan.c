@@ -23,7 +23,7 @@
 #include "bss.h"
 #include "scan.h"
 #include "mesh.h"
-#include "vendor_ie_custom.h"
+#include "common/vendor_ie_custom.h"
 
 static struct wpabuf * wpa_supplicant_extra_ies(struct wpa_supplicant *wpa_s);
 

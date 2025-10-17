@@ -196,4 +196,36 @@ Echo back the client_hash_secret received from STA's Association Request in the 
 **Result:**
 AP successfully includes custom vendor IE (OUI 0x027a8b, Type 0xff) in Association Response, echoing the exact payload received from the client. Debug logs confirm successful transmission with hexdump. Completes the full handshake: STA sends vendor IE in AssocReq → AP stores it → AP echoes it back in AssocResp.
 
+### Faeture 7: Move `vendor_ie_custom` to common
+
+Move to `src/common`
+
+---
+
+### Feature 8: Vendor IE Ticket Payload Structure Implementation
+
+**Modified Files:**
+- `src/common/vendor_ie_custom.c`
+- `src/common/vendor_ie_custom.h`
+- `wpa_supplicant/Makefile`
+- `hostapd/Makefile`
+- `wpa_supplicant/sme.c`
+- `wpa_supplicant/scan.c`
+
+**Changes:**
+- Refactored `build_custom_vendor_ie()` with wpabuf APIs: `wpabuf_put_u8()`, `wpabuf_put_be16()`, `wpabuf_put_data()`
+- Added CUSTOM_RK_NO_DEBUG build payload: Client Hash (SHA256, 32 bytes), PMK (32 bytes), 802.1X EAPOL-Key frame
+- Defined structures: `custom_vendor_ie_ticket`, `custom_vendor_ie_eapol_key` in header
+- Added size macros: `CUSTOM_CLIENT_HASH_SIZE`, `CUSTOM_PMK_SIZE`, `CUSTOM_WPA_NONCE_SIZE`, etc.
+- Replaced hardcoded values with sizeof-based calculations
+- Added comprehensive documentation with ticket format table
+- Updated Makefiles: `../src/common/vendor_ie_custom.o` for both hostapd and wpa_supplicant
+- Updated includes: `#include "common/vendor_ie_custom.h"` in sme.c and scan.c
+
+**Reason:**
+Enable resumption ticket exchange via vendor IE. Provide structured, documented payload format for AP/STA parsing consistency.
+
+**Result:**
+Complete ticket structure with client hash, PMK, and EAPOL-Key frame. Type-safe, maintainable implementation accessible by both hostapd and wpa_supplicant.
+
 ---
