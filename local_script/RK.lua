@@ -17,7 +17,15 @@ local pf_oui_type = ProtoField.uint8("rk.oui_type", "OUI Type", base.HEX, {
 local pf_client_size = ProtoField.uint8("rk.client_size", "Client Size", base.DEC)
 local pf_client_raw_encrypted = ProtoField.bytes("rk.client_raw_encrypted", "PMKD-Encrypted Client Raw")
 
--- Ticket fields
+-- Ticket envelope
+local pf_ticket_size = ProtoField.uint8("rk.ticket_size", "Ticket Size", base.DEC)
+
+-- RK-Encrypted Ticket fields (AES-GCM)
+local pf_ticket_iv = ProtoField.bytes("rk.ticket_iv", "Ticket IV (AES-GCM Nonce)")
+local pf_ticket_encrypted = ProtoField.bytes("rk.ticket_encrypted", "Encrypted Ticket Payload")
+local pf_ticket_tag = ProtoField.bytes("rk.ticket_tag", "Ticket Auth Tag (AES-GCM)")
+
+-- Ticket plaintext fields (after decryption, shown as encrypted)
 local pf_client_hash_size = ProtoField.uint8("rk.client_hash_size", "Client Hash Size", base.DEC)
 local pf_client_hash = ProtoField.bytes("rk.client_hash", "Client Hash (SHA256)")
 local pf_pmk_size = ProtoField.uint8("rk.pmk_size", "PMK Size", base.DEC)
@@ -62,6 +70,8 @@ local pf_test_data = ProtoField.bytes("rk.test_data", "Test Data")
 rk_vendor_proto.fields = {
     pf_oui_type,
     pf_client_size, pf_client_raw_encrypted,
+    pf_ticket_size,
+    pf_ticket_iv, pf_ticket_encrypted, pf_ticket_tag,
     pf_client_hash_size, pf_client_hash,
     pf_pmk_size, pf_pmk,
     pf_auth_version, pf_auth_type, pf_auth_msg_size,
@@ -143,46 +153,56 @@ function rk_vendor_proto.dissector(buffer, pinfo, tree)
     subtree:add(pf_client_raw_encrypted, buffer(offset, client_size))
     offset = offset + client_size
 
+    -- Ticket Size (total size of RK-encrypted ticket: IV + Encrypted + Tag)
+    if offset >= buf_len then return buf_len end
+    local ticket_size = buffer(offset, 1):uint()
+    subtree:add(pf_ticket_size, buffer(offset, 1))
+    offset = offset + 1
+
+    -- Create RK-Encrypted Ticket subtree
+    local ticket_tree = subtree:add(rk_vendor_proto, buffer(offset, ticket_size), "RK-Encrypted Ticket (AES-256-GCM, " .. ticket_size .. " bytes)")
+
+    -- Ticket IV / Nonce (12 bytes for AES-GCM)
+    if offset + 12 > buf_len then return buf_len end
+    ticket_tree:add(pf_ticket_iv, buffer(offset, 12))
+    offset = offset + 12
+
+    -- Encrypted Payload (ticket_size - 12 IV - 16 tag)
+    local encrypted_payload_size = ticket_size - 12 - 16
+    if encrypted_payload_size > 0 and offset + encrypted_payload_size <= buf_len then
+        ticket_tree:add(pf_ticket_encrypted, buffer(offset, encrypted_payload_size)):append_text(" (" .. encrypted_payload_size .. " bytes)")
+        offset = offset + encrypted_payload_size
+    end
+
+    -- Authentication Tag (16 bytes for AES-GCM)
+    if offset + 16 <= buf_len then
+        ticket_tree:add(pf_ticket_tag, buffer(offset, 16))
+        offset = offset + 16
+    end
+
+    -- Note: The encrypted payload contains:
+    -- - Client Hash Size (1 byte)
+    -- - Client Hash (32 bytes)
+    -- - PMK Size (1 byte)
+    -- - PMK (32 bytes)
+    -- - 802.1X Version (1 byte)
+    -- - 802.1X Type (1 byte)
+    -- - Auth Message Size (2 bytes)
+    -- - EAPOL-Key frame (variable)
+    -- These fields cannot be parsed without decryption
+    -- ticket_tree:add(buffer(offset - encrypted_payload_size - 16, 0), "Note: Encrypted payload contains Client Hash, PMK, and EAPOL-Key frame")
+
+    -- Skip remaining parsing since payload is encrypted
+    -- The following code is commented out as it was for plaintext parsing
+    --[[
     -- Client Hash Size
     if offset >= buf_len then return buf_len end
     local client_hash_size = buffer(offset, 1):uint()
-    subtree:add(pf_client_hash_size, buffer(offset, 1))
+    ticket_tree:add(pf_client_hash_size, buffer(offset, 1))
     offset = offset + 1
-
-    -- Client Hash
-    if offset >= buf_len then return buf_len end
-    subtree:add(pf_client_hash, buffer(offset, client_hash_size))
-    offset = offset + client_hash_size
-
-    -- PMK Size
-    if offset >= buf_len then return buf_len end
-    local pmk_size = buffer(offset, 1):uint()
-    subtree:add(pf_pmk_size, buffer(offset, 1))
-    offset = offset + 1
-
-    -- PMK
-    if offset >= buf_len then return buf_len end
-    subtree:add(pf_pmk, buffer(offset, pmk_size))
-    offset = offset + pmk_size
-
-    -- 802.1X Version
-    if offset >= buf_len then return buf_len end
-    subtree:add(pf_auth_version, buffer(offset, 1))
-    offset = offset + 1
-
-    -- 802.1X Type
-    if offset >= buf_len then return buf_len end
-    subtree:add(pf_auth_type, buffer(offset, 1))
-    offset = offset + 1
-
-    -- Auth Message Size (big-endian)
-    if offset >= buf_len then return buf_len end
-    local auth_msg_size = buffer(offset, 2):uint()
-    subtree:add(pf_auth_msg_size, buffer(offset, 2))
-    offset = offset + 2
 
     -- EAPOL-Key frame
-    local eapol_tree = subtree:add(rk_vendor_proto, buffer(offset), "EAPOL-Key Frame")
+    local eapol_tree = ticket_tree:add(rk_vendor_proto, buffer(offset), "EAPOL-Key Frame")
 
     -- Key Descriptor Type
     if offset >= buf_len then return buf_len end
@@ -267,6 +287,7 @@ function rk_vendor_proto.dissector(buffer, pinfo, tree)
         eapol_tree:add(pf_key_data, buffer(offset, key_data_len))
         offset = offset + key_data_len
     end
+    --]]
 
     return buf_len
 end

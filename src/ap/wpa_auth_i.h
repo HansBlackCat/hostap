@@ -236,12 +236,15 @@ struct wpa_group {
 	/* Number of references except those in struct wpa_group->next */
 	unsigned int references;
 	unsigned int num_setup_iface;
+};
 
 #ifdef CUSTOM_RK
-    int GN_rk, GM_rk;
-    u8 RK[2][WPA_RK_MAX_LEN];
-#endif /* CUSTOM_RK */
+// PLACEHOLDER
+struct wpa_rk {
+    u8 rmk[WPA_RK_MAX_LEN];
+    u8 rtk[WPA_RK_MAX_LEN];
 };
+#endif /* CUSTOM_RK */
 
 
 struct wpa_ft_pmk_cache;
@@ -287,6 +290,10 @@ struct wpa_authenticator {
 	u8 link_id;
 	bool primary_auth;
 #endif /* CONFIG_IEEE80211BE */
+
+#ifdef CUSTOM_RK
+	struct wpa_rk *rk;
+#endif /* CUSTOM_RK */
 };
 
 

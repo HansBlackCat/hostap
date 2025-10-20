@@ -27,6 +27,10 @@
 #include "common/wpa_ctrl.h"
 #include "common/ptksa_cache.h"
 #include "common/nan_de.h"
+#ifdef CUSTOM_RK
+#include "common/vendor_ie_custom.h"
+#include "common/resumption_ticket.h"
+#endif /* CUSTOM_RK */
 #include "radius/radius.h"
 #include "radius/radius_client.h"
 #include "p2p/p2p.h"
@@ -4771,8 +4775,8 @@ skip_wpa_ies:
 				  elems->wfa_capab + elems->wfa_capab_len);
 
 #ifdef CUSTOM_RK
-	/* Parse custom vendor specific IE from Association Request */
-	if (sta->wpa_sm && !link) {
+	/* Parse and decrypt custom vendor specific IE from Association Request */
+	if (sta->wpa_sm && !link && hapd->wpa_auth && hapd->wpa_auth->rk) {
 		const u8 *custom_ie;
 		u32 vendor_type = OUI_CUSTOM_RK;  /* OUI: 0x027a8b, Type: 0xff */
 
@@ -4780,29 +4784,97 @@ skip_wpa_ies:
 		if (custom_ie) {
 			/* IE format: ID(1) + Length(1) + OUI(3) + Type(1) + Data(variable) */
 			u8 ie_len = custom_ie[1];
+			size_t ie_total_len = 2 + ie_len;  /* ID + Length + payload */
 
-			if (ie_len >= 5) {  /* At least OUI(3) + Type(1) + Data(1) */
-				const u8 *data = custom_ie + 2 + 4;  /* Skip ID(1), Length(1), OUI(3), Type(1) */
-				size_t data_len = ie_len - 4;  /* Subtract OUI(3) + Type(1) */
+			wpa_printf(MSG_DEBUG, "Custom Vendor IE: Found vendor IE from " MACSTR " (length: %u)",
+				   MAC2STR(sta->addr), ie_len);
 
-				/* Store the payload in wpa_state_machine */
-				if (data_len <= WPA_CLIENT_HASH_SECRET) {
-					os_memcpy(sta->wpa_sm->client_hash_secret, data, data_len);
-					sta->wpa_sm->client_hash_secret_len = data_len;
+			/* Allocate buffers for decrypted data */
+			u8 client_raw[TICKET_CLIENT_RAW_ENCRYPTED_SIZE];
+			u8 client_raw_size = 0;
+			struct resumption_ticket ticket;
 
-					wpa_printf(MSG_DEBUG, "Custom Vendor IE: Stored %zu bytes from " MACSTR,
-						   data_len, MAC2STR(sta->addr));
-					wpa_hexdump(MSG_DEBUG, "Custom Vendor IE payload",
-						    sta->wpa_sm->client_hash_secret,
-						    sta->wpa_sm->client_hash_secret_len);
-				} else {
-					wpa_printf(MSG_WARNING, "Custom Vendor IE: Data too large (%zu bytes, max %d)",
-						   data_len, WPA_CLIENT_HASH_SECRET);
+			os_memset(&ticket, 0, sizeof(ticket));
+
+			/* Parse and decrypt vendor IE ticket using RTK from authenticator */
+			if (parse_and_decrypt_vendor_ie_ticket(
+				    hapd->wpa_auth->rk->rtk,  /* RTK from authenticator */
+				    custom_ie,                 /* IE data (including ID and Length) */
+				    ie_total_len,              /* Total IE length */
+				    client_raw,                /* Output: PMKD-encrypted client raw */
+				    &client_raw_size,          /* Output: client raw size */
+				    &ticket) == 0) {           /* Output: decrypted ticket */
+
+				wpa_printf(MSG_INFO, "=== Successfully decrypted resumption ticket from " MACSTR " ===",
+					   MAC2STR(sta->addr));
+
+				/* Print PMKD-encrypted client raw */
+				wpa_printf(MSG_DEBUG, "PMKD-Encrypted Client Raw Size: %u bytes", client_raw_size);
+				wpa_hexdump(MSG_DEBUG, "PMKD-Encrypted Client Raw", client_raw, client_raw_size);
+
+				/* Print decrypted ticket contents */
+				wpa_printf(MSG_DEBUG, "--- Decrypted Ticket Contents ---");
+
+				wpa_printf(MSG_DEBUG, "Client Hash Size: %u bytes", ticket.client_hash_size);
+				wpa_hexdump_key(MSG_DEBUG, "Client Hash (SHA256)",
+						ticket.client_hash, ticket.client_hash_size);
+
+				wpa_printf(MSG_DEBUG, "PMK Size: %u bytes", ticket.pmk_size);
+				wpa_hexdump_key(MSG_DEBUG, "PMK", ticket.pmk, ticket.pmk_size);
+
+				wpa_printf(MSG_DEBUG, "802.1X Version: 0x%02x", ticket.auth_version);
+				wpa_printf(MSG_DEBUG, "802.1X Type: 0x%02x", ticket.auth_type);
+				wpa_printf(MSG_DEBUG, "Auth Message Size: %u bytes", ticket.auth_msg_size);
+
+				/* Print EAPOL-Key frame details */
+				wpa_printf(MSG_DEBUG, "--- EAPOL-Key Frame ---");
+				wpa_printf(MSG_DEBUG, "Key Descriptor Type: 0x%02x",
+					   ticket.eapol_message.descriptor_type);
+				wpa_printf(MSG_DEBUG, "Key Information: 0x%04x",
+					   ticket.eapol_message.key_information);
+				wpa_printf(MSG_DEBUG, "Key Length: %u",
+					   ticket.eapol_message.key_length);
+
+				wpa_hexdump(MSG_DEBUG, "Replay Counter",
+					    ticket.eapol_message.replay_counter,
+					    TICKET_REPLAY_COUNTER_SIZE);
+				wpa_hexdump_key(MSG_DEBUG, "Key Nonce",
+						ticket.eapol_message.nonce,
+						TICKET_WPA_NONCE_SIZE);
+				wpa_hexdump(MSG_DEBUG, "Key IV",
+					    ticket.eapol_message.iv,
+					    TICKET_KEY_IV_SIZE);
+				wpa_hexdump(MSG_DEBUG, "Key RSC",
+					    ticket.eapol_message.rsc,
+					    TICKET_KEY_RSC_SIZE);
+				wpa_hexdump(MSG_DEBUG, "Key ID",
+					    ticket.eapol_message.key_id,
+					    TICKET_KEY_ID_SIZE);
+				wpa_hexdump(MSG_DEBUG, "Key MIC",
+					    ticket.eapol_message.mic,
+					    TICKET_KEY_MIC_SIZE);
+				wpa_printf(MSG_DEBUG, "Key Data Length: %u",
+					   ticket.eapol_message.key_data_length);
+
+				wpa_printf(MSG_INFO, "=== Resumption ticket decryption successful ===");
+
+				/* Store client raw in wpa_state_machine for future use */
+				if (client_raw_size <= WPA_CLIENT_HASH_SECRET) {
+					os_memcpy(sta->wpa_sm->client_hash_secret, client_raw, client_raw_size);
+					sta->wpa_sm->client_hash_secret_len = client_raw_size;
 				}
+
 			} else {
-				wpa_printf(MSG_DEBUG, "Custom Vendor IE: Invalid length %u", ie_len);
+				wpa_printf(MSG_ERROR, "Custom Vendor IE: Failed to parse and decrypt ticket from " MACSTR,
+					   MAC2STR(sta->addr));
 			}
+		} else {
+			wpa_printf(MSG_DEBUG, "Custom Vendor IE: No vendor IE found from " MACSTR,
+				   MAC2STR(sta->addr));
 		}
+	} else if (sta->wpa_sm && !link) {
+		wpa_printf(MSG_WARNING, "Custom Vendor IE: RTK not available (wpa_auth=%p, rk=%p)",
+			   hapd->wpa_auth, hapd->wpa_auth ? hapd->wpa_auth->rk : NULL);
 	}
 #endif /* CUSTOM_RK */
 

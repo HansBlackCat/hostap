@@ -1462,6 +1462,8 @@ endif
 ifdef NEED_AES_ENCBLOCK
 AESOBJS += ../src/crypto/aes-encblock.o
 endif
+# Add AES-GCM for ticket encryption
+AESOBJS += ../src/crypto/aes-gcm.o
 NEED_AES_ENC=y
 ifneq ($(CONFIG_TLS), openssl)
 ifneq ($(CONFIG_TLS), linux)

@@ -148,6 +148,10 @@ struct eapol_state_machine;
 struct ft_remote_seq;
 struct wpa_channel_info;
 
+#ifdef CUSTOM_RK
+struct wpa_rk;
+#endif /* CUSTOM_RK */
+
 
 struct ft_remote_r0kh {
 	struct ft_remote_r0kh *next;
@@ -442,6 +446,12 @@ int wpa_init_keys(struct wpa_authenticator *wpa_auth);
 void wpa_deinit(struct wpa_authenticator *wpa_auth);
 int wpa_reconfig(struct wpa_authenticator *wpa_auth,
 		 struct wpa_auth_config *conf);
+
+#ifdef CUSTOM_RK
+int wpa_rmk_init(struct wpa_rk *rk);
+int wpa_rtk_init(struct wpa_rk *rk, const u8 *addr);
+int wpa_rtk_rekey(struct wpa_rk *rk, const u8 *addr);
+#endif /* CUSTOM_RK */
 
 enum wpa_validate_result {
 	WPA_IE_OK, WPA_INVALID_IE, WPA_INVALID_GROUP, WPA_INVALID_PAIRWISE,

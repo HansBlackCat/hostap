@@ -58,7 +58,7 @@ static void wpa_request_new_ptk(struct wpa_state_machine *sm);
 static int wpa_gtk_update(struct wpa_authenticator *wpa_auth,
 			  struct wpa_group *group);
 static int wpa_group_config_group_keys(struct wpa_authenticator *wpa_auth,
-				       struct wpa_group *group);
+				      struct wpa_group *group);
 static int wpa_derive_ptk(struct wpa_state_machine *sm, const u8 *snonce,
 			  const u8 *pmk, unsigned int pmk_len,
 			  struct wpa_ptk *ptk, int force_sha256,
@@ -702,6 +702,57 @@ static int wpa_group_init_gmk_and_counter(struct wpa_authenticator *wpa_auth,
 }
 
 
+#ifdef CUSTOM_RK
+int wpa_rmk_init(struct wpa_rk *rk)
+{
+	if (random_get_bytes(rk->rmk, WPA_RK_MAX_LEN) < 0)
+		return -1;
+	wpa_hexdump_key(MSG_DEBUG, "RMK", rk->rmk, WPA_RK_MAX_LEN);
+	wpa_printf(MSG_DEBUG, "RMK initialized: %02x%02x%02x%02x",
+		   rk->rmk[0], rk->rmk[1], rk->rmk[2], rk->rmk[3]);
+
+	return 0;
+}
+
+
+int wpa_rtk_init(struct wpa_rk *rk, const u8 *addr)
+{
+	u8 data[ETH_ALEN + 8];
+	int ret = 0;
+
+	if (wpa_rmk_init(rk) < 0)
+		return -1;
+
+	if (wpa_rtk_rekey(rk, addr) < 0)
+		return -1;
+
+	return ret;
+}
+
+int wpa_rtk_rekey(struct wpa_rk *rk, const u8 *addr)
+{
+    u8 data[ETH_ALEN + 8];
+    int ret = 0;
+
+    os_memset(data, 0, sizeof(data));
+    os_memcpy(data, addr, ETH_ALEN);
+    wpa_get_ntp_timestamp(data + ETH_ALEN);
+
+    if (sha256_prf(rk->rmk, WPA_RK_MAX_LEN, "Resumption Key",
+               data, sizeof(data), rk->rtk, WPA_RK_MAX_LEN) < 0)
+        ret = -1;
+
+    wpa_hexdump_key(MSG_DEBUG, "RTK rekeyed", rk->rtk, WPA_RK_MAX_LEN);
+    wpa_printf(MSG_DEBUG, "RTK rekeyed: %02x%02x%02x%02x",
+           rk->rtk[0], rk->rtk[1], rk->rtk[2], rk->rtk[3]);
+
+    forced_memzero(data, sizeof(data));
+
+    return ret;
+}
+#endif /* CUSTOM_RK */
+
+
 static struct wpa_group * wpa_group_init(struct wpa_authenticator *wpa_auth,
 					 int vlan_id, int delay_init)
 {
@@ -802,6 +853,19 @@ struct wpa_authenticator * wpa_init(const u8 *addr,
 	wpa_auth->group = wpa_group_init(wpa_auth, 0, 1);
 	if (!wpa_auth->group)
 		goto fail;
+
+#ifdef CUSTOM_RK
+	wpa_auth->rk = os_zalloc(sizeof(struct wpa_rk));
+	if (!wpa_auth->rk) {
+		wpa_printf(MSG_ERROR, "Failed to allocate RK structure.");
+		goto fail;
+	}
+	if (wpa_rtk_init(wpa_auth->rk, addr) < 0) {
+		wpa_printf(MSG_ERROR,
+			   "Failed to initialize resumption keys.");
+		goto fail;
+	}
+#endif /* CUSTOM_RK */
 
 	/* Per-link PMKSA cache */
 	wpa_auth->pmksa = pmksa_cache_auth_init(wpa_auth_pmksa_free_cb,
@@ -964,6 +1028,13 @@ void wpa_deinit(struct wpa_authenticator *wpa_auth)
 #ifdef CONFIG_P2P
 	bitfield_free(wpa_auth->ip_pool);
 #endif /* CONFIG_P2P */
+
+#ifdef CUSTOM_RK
+	if (wpa_auth->rk) {
+		forced_memzero(wpa_auth->rk, sizeof(struct wpa_rk));
+		os_free(wpa_auth->rk);
+	}
+#endif /* CUSTOM_RK */
 
 	os_free(wpa_auth->wpa_ie);
 	wpa_deinit_groups(wpa_auth);
@@ -5705,19 +5776,6 @@ static int wpa_gtk_update(struct wpa_authenticator *wpa_auth,
 	wpa_hexdump_key(MSG_DEBUG, "BIGTK",
 			group->BIGTK[group->GN_bigtk - 6], len);
 
-#ifdef CUSTOM_RK
-    /* RK derivation */
-    len = wpa_cipher_key_len(conf->group_mgmt_cipher);
-    os_memcpy(group->GNonce, group->Counter, WPA_NONCE_LEN);
-    inc_byte_array(group->Counter, WPA_NONCE_LEN);
-    if (wpa_gmk_to_gtk(group->GMK, "RK key expansion",
-               wpa_auth->addr, group->GNonce,
-               group->RK[group->GN_rk - 8], len) < 0)
-        return -1;
-    wpa_hexdump_key(MSG_DEBUG, "RK",
-            group->RK[group->GN_rk - 8], len);
-#endif /* CUSTOM_RK */
-
 	return ret;
 }
 
@@ -5739,10 +5797,6 @@ static void wpa_group_gtk_init(struct wpa_authenticator *wpa_auth,
 	group->GM_igtk = 5;
 	group->GN_bigtk = 6;
 	group->GM_bigtk = 7;
-#ifdef CUSTOM_RK
-    group->GN_rk = 8;
-    group->GM_rk = 9;
-#endif /* CUSTOM_RK */
 	/* GTK[GN] = CalcGTK() */
 	wpa_gtk_update(wpa_auth, group);
 }

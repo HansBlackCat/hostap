@@ -957,6 +957,8 @@ endif
 ifdef NEED_AES_CTR
 AESOBJS += ../src/crypto/aes-ctr.o
 endif
+# Add AES-GCM for ticket encryption
+AESOBJS += ../src/crypto/aes-gcm.o
 ifdef NEED_AES_ENCBLOCK
 AESOBJS += ../src/crypto/aes-encblock.o
 endif
