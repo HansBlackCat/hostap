@@ -149,6 +149,12 @@ WPA_CIPHER_BIP_CMAC_256)
 #define WFA_KEY_DATA_DPP RSN_SELECTOR(0x50, 0x6f, 0x9a, 0x21)
 #define WFA_KEY_DATA_RSN_OVERRIDE_LINK RSN_SELECTOR(0x50, 0x6f, 0x9a, 0x2d)
 
+#ifdef CUSTOM_RK
+/* Custom Resumption Key Data Encapsulation (OUI: 0x027a8b) */
+#define CUSTOM_KEY_DATA_TICKET_RAW RSN_SELECTOR(0x02, 0x7a, 0x8b, 0x01)
+#define CUSTOM_KEY_DATA_TICKET_ENCRYPTED RSN_SELECTOR(0x02, 0x7a, 0x8b, 0x02)
+#endif /* CUSTOM_RK */
+
 #define WPA_OUI_TYPE RSN_SELECTOR(0x00, 0x50, 0xf2, 1)
 
 #define RSN_SELECTOR_PUT(a, val) WPA_PUT_BE32((u8 *) (a), (val))

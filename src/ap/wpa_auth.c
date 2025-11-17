@@ -5084,6 +5084,17 @@ SM_STATE(WPA_PTK, PTKINITNEGOTIATING)
 
 	if (gtk)
 		kde_len += 2 + RSN_SELECTOR_LEN + 2 + gtk_len;
+
+#ifdef CUSTOM_RK
+	/* Reserve space for resumption ticket KDEs if requested */
+	if (sm->resumption_ticket_requested) {
+		/* KDE 1: Ticket Raw (32 bytes) */
+		kde_len += 2 + RSN_SELECTOR_LEN + 32;
+		/* KDE 2: Ticket Encrypted (128 bytes, placeholder) */
+		kde_len += 2 + RSN_SELECTOR_LEN + 128;
+	}
+#endif /* CUSTOM_RK */
+
 #ifdef CONFIG_IEEE80211R_AP
 	if (wpa_key_mgmt_ft(sm->wpa_key_mgmt)) {
 		kde_len += 2 + PMKID_LEN; /* PMKR1Name into RSN IE */
@@ -5150,6 +5161,41 @@ SM_STATE(WPA_PTK, PTKINITNEGOTIATING)
 		pos = wpa_add_kde(pos, RSN_KEY_DATA_GROUPKEY, hdr, 2,
 				  gtk, gtk_len);
 	}
+
+#ifdef CUSTOM_RK
+	// TODO: remove!!!!!!!!!!
+	sm->resumption_ticket_requested = 1;
+
+	/* Add resumption ticket KDEs if requested by client */
+	if (sm->resumption_ticket_requested) {
+		u8 ticket_raw[32];  /* PMKD-encrypted client raw */
+		size_t ticket_raw_len = 32;
+		u8 ticket_encrypted[256];  /* RTK-encrypted resumption ticket */
+		size_t ticket_encrypted_len = 0;
+
+		wpa_printf(MSG_DEBUG, "Adding resumption ticket KDEs to msg 3/4");
+
+		/* TODO: Generate actual PMKD-encrypted client raw */
+		os_memset(ticket_raw, 0xAA, ticket_raw_len);
+
+		/* Add KDE 1: Ticket Raw (PMKD-encrypted client raw) */
+		pos = wpa_add_kde(pos, CUSTOM_KEY_DATA_TICKET_RAW,
+				  ticket_raw, ticket_raw_len, NULL, 0);
+		wpa_hexdump_key(MSG_DEBUG, "Ticket Raw KDE",
+				ticket_raw, ticket_raw_len);
+
+		/* TODO: Generate actual RTK-encrypted resumption ticket */
+		ticket_encrypted_len = 128;  /* Placeholder */
+		os_memset(ticket_encrypted, 0xBB, ticket_encrypted_len);
+
+		/* Add KDE 2: Ticket Encrypted (RTK-encrypted ticket) */
+		pos = wpa_add_kde(pos, CUSTOM_KEY_DATA_TICKET_ENCRYPTED,
+				  ticket_encrypted, ticket_encrypted_len, NULL, 0);
+		wpa_hexdump_key(MSG_DEBUG, "Ticket Encrypted KDE",
+				ticket_encrypted, ticket_encrypted_len);
+	}
+#endif /* CUSTOM_RK */
+
 	pos = ieee80211w_kde_add(sm, pos);
 	if (ocv_oci_add(sm, &pos, conf->oci_freq_override_eapol_m3) < 0)
 		goto done;

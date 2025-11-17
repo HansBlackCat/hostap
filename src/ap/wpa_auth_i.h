@@ -113,6 +113,10 @@ struct wpa_state_machine {
 	int ocv_enabled;
 #endif /* CONFIG_OCV */
 
+#ifdef CUSTOM_RK
+	unsigned int resumption_ticket_requested:1;
+#endif /* CUSTOM_RK */
+
 	u8 req_replay_counter[WPA_REPLAY_COUNTER_LEN];
 	int req_replay_counter_used;
 
