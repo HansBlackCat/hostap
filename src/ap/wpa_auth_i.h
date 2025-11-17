@@ -44,6 +44,7 @@ struct wpa_state_machine {
     u8 rk[WPA_RK_MAX_LEN];
     size_t rk_len;
     size_t client_hash_secret_len;
+    bool is_resumption;  /* Fast resumption mode (skip Message 1) */
 #endif /* CUSTOM_RK */
 
 	bool Init;
@@ -243,6 +244,7 @@ struct wpa_group {
 struct wpa_rk {
     u8 rmk[WPA_RK_MAX_LEN];
     u8 rtk[WPA_RK_MAX_LEN];
+    u8 rak[WPA_RK_MAX_LEN];
 };
 #endif /* CUSTOM_RK */
 

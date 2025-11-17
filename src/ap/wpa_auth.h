@@ -451,6 +451,10 @@ int wpa_reconfig(struct wpa_authenticator *wpa_auth,
 int wpa_rmk_init(struct wpa_rk *rk);
 int wpa_rtk_init(struct wpa_rk *rk, const u8 *addr);
 int wpa_rtk_rekey(struct wpa_rk *rk, const u8 *addr);
+int wpa_rak_init(struct wpa_rk *rk, const u8 *addr);
+int wpa_rak_rekey(struct wpa_rk *rk, const u8 *addr);
+int wpa_tan_generate(struct wpa_rk *rk, const u8 *sa, const u8 *aa,
+		     const u8 *ticket_random, u8 *tan_out);
 #endif /* CUSTOM_RK */
 
 enum wpa_validate_result {

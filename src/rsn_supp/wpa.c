@@ -508,6 +508,92 @@ static int wpa_supplicant_get_pmk(struct wpa_sm *sm,
 }
 
 
+#ifdef CUSTOM_RK
+/**
+ * wpa_supplicant_send_2_of_4_resumption - Send message 2 for resumption
+ * @sm: Pointer to WPA state machine data from wpa_sm_init()
+ * Returns: >= 0 on success, < 0 on failure
+ *
+ * This function generates and sends EAPOL-Key Message 2 for fast resumption
+ * using hardcoded PMK, ANonce, and replay counter from the resumption ticket.
+ */
+int wpa_supplicant_send_2_of_4_resumption(struct wpa_sm *sm)
+{
+	struct wpa_ptk *ptk;
+	struct wpa_eapol_key fake_key;
+	int ret;
+
+	/* Hardcoded values from resumption ticket (vendor_ie_custom.c) */
+	static const u8 ticket_pmk[PMK_LEN] = { 0x00 }; /* All zeros for testing */
+	static const u8 ticket_anonce[WPA_NONCE_LEN] = {
+		0x6a, 0x9e, 0x0d, 0xa6, 0xbf, 0x66, 0xe0, 0x3f,
+		0x74, 0xf0, 0xdf, 0x4d, 0x3c, 0xf9, 0x83, 0xdc,
+		0x50, 0x57, 0xef, 0xf9, 0x64, 0x51, 0x8b, 0xf8,
+		0x18, 0x9a, 0x7a, 0x2d, 0xa9, 0x63, 0x07, 0xe2
+	};
+	static const u8 ticket_replay_counter[WPA_REPLAY_COUNTER_LEN] = {
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01
+	};
+
+	wpa_printf(MSG_DEBUG, "WPA: Sending EAPOL-Key Message 2/4 (Resumption)");
+
+	/* Generate fresh SNonce */
+	if (random_get_bytes(sm->snonce, WPA_NONCE_LEN)) {
+		wpa_msg(sm->ctx->msg_ctx, MSG_WARNING,
+			"WPA: Failed to get random data for SNonce");
+		return -1;
+	}
+	wpa_hexdump(MSG_DEBUG, "WPA: SNonce for resumption", sm->snonce, WPA_NONCE_LEN);
+
+	/* Store ticket PMK temporarily */
+	os_memcpy(sm->pmk, ticket_pmk, PMK_LEN);
+	sm->pmk_len = PMK_LEN;
+
+	/* Calculate PTK using ticket PMK and ANonce */
+	ptk = &sm->tptk;
+	os_memset(ptk, 0, sizeof(*ptk));
+
+	ret = wpa_pmk_to_ptk(sm->pmk, sm->pmk_len, "Pairwise key expansion",
+			     sm->own_addr, wpa_sm_get_auth_addr(sm),
+			     sm->snonce, ticket_anonce, ptk, sm->key_mgmt,
+			     sm->pairwise_cipher, NULL, 0, 0);
+	if (ret) {
+		wpa_printf(MSG_ERROR, "WPA: PTK derivation failed for resumption");
+		return -1;
+	}
+	sm->tptk_set = 1;
+
+	wpa_hexdump_key(MSG_DEBUG, "WPA: PTK-KCK (resumption)", ptk->kck, ptk->kck_len);
+	wpa_hexdump_key(MSG_DEBUG, "WPA: PTK-KEK (resumption)", ptk->kek, ptk->kek_len);
+	wpa_hexdump_key(MSG_DEBUG, "WPA: PTK-TK (resumption)", ptk->tk, ptk->tk_len);
+
+	/* Create fake EAPOL-Key structure for replay counter */
+	os_memset(&fake_key, 0, sizeof(fake_key));
+	os_memcpy(fake_key.replay_counter, ticket_replay_counter, WPA_REPLAY_COUNTER_LEN);
+	os_memcpy(fake_key.key_nonce, ticket_anonce, WPA_NONCE_LEN);
+	fake_key.key_length[0] = 0;
+	fake_key.key_length[1] = 16; /* AES key length */
+
+	/* Send Message 2/4 */
+	ret = wpa_supplicant_send_2_of_4(sm, wpa_sm_get_auth_addr(sm),
+					 &fake_key, WPA_KEY_INFO_TYPE_AES_128_CMAC,
+					 sm->snonce, sm->assoc_wpa_ie,
+					 sm->assoc_wpa_ie_len, ptk);
+
+	if (ret < 0) {
+		wpa_printf(MSG_ERROR, "WPA: Failed to send Message 2/4 for resumption");
+		return -1;
+	}
+
+	/* Store ANonce for later use */
+	os_memcpy(sm->anonce, ticket_anonce, WPA_NONCE_LEN);
+
+	wpa_printf(MSG_DEBUG, "WPA: Sent EAPOL-Key Message 2/4 (Resumption) successfully");
+	return 0;
+}
+#endif /* CUSTOM_RK */
+
+
 /**
  * wpa_supplicant_send_2_of_4 - Send message 2 of WPA/RSN 4-Way Handshake
  * @sm: Pointer to WPA state machine data from wpa_sm_init()

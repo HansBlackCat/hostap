@@ -4,6 +4,7 @@
 #include "utils/wpabuf.h"
 #include "crypto/aes_wrap.h"
 #include "crypto/random.h"
+#include "crypto/sha256.h"
 #include "resumption_ticket.h"
 #include "vendor_ie_custom.h"
 
@@ -17,12 +18,14 @@
  * OUI                          | 3 bytes   | 0x027a8b (Custom OUI)
  * OUI Type                     | 1 byte    | 0xff (Custom type)
  * ----------------------------------------------------------------------------
- * Client     Size              | 1 byte    | Size of client raw identifier
+ * PMKD-Encrypted Raw Size      | 1 byte    | Size of client raw identifier
  * PMKD-Encrypted Client Raw    | Variable  | Encrypted client raw identifier
  * ----------------------------------------------------------------------------
  * Ticket Size                  | 1 byte    | Size of the ticket
- * RK-Encrypted Ticket          | Variable  | Encrypted resumption ticket
- * 802.1X - Message 2           | Variable  | EAPOL-Key frame for resumption
+ * RTK-Encrypted Res Ticket     | Variable  | Encrypted resumption ticket
+ * ----------------------------------------------------------------------------
+ * Handshake Payload Size       | 1 byte    | Size of the ticket
+ * Handshake Payload            | variable  | Size of the ticket
  * ============================================================================
  */
 
@@ -33,36 +36,27 @@
  * ============================================================================
  * Field                        | Size      | Description
  * ============================================================================
- * Client Hash Size             | 1 byte    | Size of client hash (32 for SHA256)
- * Client Hash                  | Variable  | SHA256 hash of client identifier
- * PMK Size                     | 1 byte    | Size of PMK (32 bytes)
- * PMK                          | Variable  | Pre-Master Key
- * 802.1X Version               | 1 byte    | 0x02 (802.1X-2004)
- * 802.1X Type                  | 1 byte    | 0x03 (EAPOL-Key)
- * Auth Message Size            | 2 bytes   | Size of EAPOL-Key frame
- * ----------------------------------------------------------------------------
- * EAPOL-Key Descriptor Type    | 1 byte    | 0x02 (RSN Key)
- * EAPOL-Key Information        | 2 bytes   | Key flags (big-endian)
- * EAPOL-Key Length             | 2 bytes   | Key length (big-endian)
- * EAPOL-Key Replay Counter     | 8 bytes   | Replay counter
- * EAPOL-Key Nonce              | 32 bytes  | Key nonce (ANonce or SNonce)
- * EAPOL-Key IV                 | 16 bytes  | EAPOL-Key IV
- * EAPOL-Key RSC                | 8 bytes   | Key RSC
- * EAPOL-Key ID                 | 8 bytes   | Key ID
- * EAPOL-Key MIC                | 16 bytes  | Message Integrity Code
- * EAPOL-Key Data Length        | 2 bytes   | Key data length (big-endian)
- * EAPOL-Key Data               | Variable  | Key data (if length > 0)
+ * Ticket Random                | 1 byte    | Ticket Random (Nonce for generating TAN)
+ * Supplicant Hash Size         | 1 byte    | Size of supplicant hash (32 for SHA256)
+ * Supplicant Hash              | Variable  | SHA256 hash of supplicant identifier
+ * TAN Hash Size                | 1 byte    | Size of PMK (32 bytes)
+ * Resumption Master Key (TAN)  | Variable  | RMK (== TAN Hash)
+ * Handshake Payload Size       | 1 byte    | Size of handshake payload
+ * Handshake Payload            | Variable  | Handshake Payload
+ * Optional                     | Variable  | Optional
  * ============================================================================
- *
- * RK-Encrypted Ticket Structure:
+ */ 
+
+/**
+ * Potential Optional Field
+ *  
+ * Optional Field Structure
  * ============================================================================
  * Field                        | Size      | Description
  * ============================================================================
- * IV (Nonce)                   | 12 bytes  | AES-GCM initialization vector
- * Encrypted Payload            | Variable  | AES-256-GCM encrypted ticket
- * Authentication Tag           | 16 bytes  | AES-GCM authentication tag
+ * PMKID                        | 16bytes   | Truncated-128 (HMAC-SHA1 based)
  * ============================================================================
- * Total encrypted size = plaintext_size + 28 bytes (12 + 16)
+ * 
  */
 
 #define AES_GCM_IV_SIZE 12
@@ -674,3 +668,41 @@ cleanup:
 //
 // 	return buf;
 // }
+
+#ifndef CUSTOM_RK_NO_DEBUG
+/* Global test ticket data */
+u8 test_supplicant_raw[TICKET_SUPPLICANT_RAW_MAX];
+u8 test_supplicant_hash[TICKET_SUPPLICANT_HASH_MAX];
+u8 test_supplicant_hash_size = 0;
+
+/**
+ * test_build_ticket - Build test resumption ticket from placeholder values
+ * Returns: 0 on success, -1 on error
+ *
+ * Computes SHA256 hash of TEST_SUPPLICANT_RAW and stores in global variable
+ */
+int test_build_ticket(void)
+{
+	u8 raw_data[] = TEST_SUPPLICANT_RAW;
+	size_t raw_len = sizeof(raw_data);
+
+	/* Store supplicant raw identifier */
+	os_memcpy(test_supplicant_raw, raw_data, TICKET_SUPPLICANT_RAW_MAX);
+
+	/* Compute SHA256 hash of supplicant raw identifier */
+	if (sha256_vector(1, (const u8 **) &raw_data, &raw_len,
+			  test_supplicant_hash) < 0) {
+		wpa_printf(MSG_ERROR, "Failed to compute supplicant hash");
+		return -1;
+	}
+
+	test_supplicant_hash_size = TICKET_SUPPLICANT_HASH_MAX;
+
+	wpa_printf(MSG_DEBUG, "Test ticket: Supplicant hash computed");
+	wpa_hexdump_key(MSG_DEBUG, "Supplicant Raw", test_supplicant_raw, TICKET_SUPPLICANT_RAW_MAX);
+	wpa_hexdump_key(MSG_DEBUG, "Supplicant Hash",
+			test_supplicant_hash, test_supplicant_hash_size);
+
+	return 0;
+}
+#endif /* CUSTOM_RK_NO_DEBUG */

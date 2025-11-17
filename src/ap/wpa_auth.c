@@ -738,8 +738,14 @@ int wpa_rtk_rekey(struct wpa_rk *rk, const u8 *addr)
     os_memcpy(data, addr, ETH_ALEN);
     wpa_get_ntp_timestamp(data + ETH_ALEN);
 
-    if (sha256_prf(rk->rmk, WPA_RK_MAX_LEN, "Resumption Key",
-               data, sizeof(data), rk->rtk, WPA_RK_MAX_LEN) < 0)
+    if (sha256_prf(
+        rk->rmk, 
+        WPA_RK_MAX_LEN, 
+        "Resumption Key",
+        data, 
+        sizeof(data), 
+        rk->rtk, 
+        WPA_RK_MAX_LEN) < 0)
         ret = -1;
 
     wpa_hexdump_key(MSG_DEBUG, "RTK rekeyed", rk->rtk, WPA_RK_MAX_LEN);
@@ -749,6 +755,70 @@ int wpa_rtk_rekey(struct wpa_rk *rk, const u8 *addr)
     forced_memzero(data, sizeof(data));
 
     return ret;
+}
+
+
+int wpa_rak_init(struct wpa_rk *rk, const u8 *addr)
+{
+	int ret = 0;
+
+	if (wpa_rak_rekey(rk, addr) < 0)
+		return -1;
+
+	return ret;
+}
+
+
+int wpa_rak_rekey(struct wpa_rk *rk, const u8 *addr)
+{
+	u8 data[ETH_ALEN + 8];
+	int ret = 0;
+
+	os_memset(data, 0, sizeof(data));
+	os_memcpy(data, addr, ETH_ALEN);
+	wpa_get_ntp_timestamp(data + ETH_ALEN);
+
+	if (sha256_prf(rk->rmk, WPA_RK_MAX_LEN,
+		       "Resumption Authentication Key",
+		       data, sizeof(data),
+		       rk->rak, WPA_RK_MAX_LEN) < 0)
+		ret = -1;
+
+	wpa_hexdump_key(MSG_DEBUG, "RAK rekeyed", rk->rak, WPA_RK_MAX_LEN);
+	wpa_printf(MSG_DEBUG, "RAK rekeyed: %02x%02x%02x%02x",
+		   rk->rak[0], rk->rak[1], rk->rak[2], rk->rak[3]);
+
+	forced_memzero(data, sizeof(data));
+
+	return ret;
+}
+
+
+int wpa_tan_generate(struct wpa_rk *rk, const u8 *sa, const u8 *aa,
+		     const u8 *ticket_random, u8 *tan_out)
+{
+	u8 data[ETH_ALEN + ETH_ALEN + 8];  /* SA || AA || Ticket Random */
+	int ret = 0;
+
+	os_memset(data, 0, sizeof(data));
+	os_memcpy(data, sa, ETH_ALEN);                        /* SA (6 bytes) */
+	os_memcpy(data + ETH_ALEN, aa, ETH_ALEN);             /* AA (6 bytes) */
+	os_memcpy(data + ETH_ALEN + ETH_ALEN, ticket_random, 8); /* Ticket Random (8 bytes) */
+
+	/* TAN = SHA256-PRF(RAK, "Ticket Generation", SA || AA || Ticket Random) */
+	if (sha256_prf(rk->rak, WPA_RK_MAX_LEN,
+		       "Ticket Generation",
+		       data, sizeof(data),
+		       tan_out, WPA_RK_MAX_LEN) < 0)
+		ret = -1;
+
+	wpa_hexdump_key(MSG_DEBUG, "TAN generated", tan_out, WPA_RK_MAX_LEN);
+	wpa_printf(MSG_DEBUG, "TAN generated: %02x%02x%02x%02x",
+		   tan_out[0], tan_out[1], tan_out[2], tan_out[3]);
+
+	forced_memzero(data, sizeof(data));
+
+	return ret;
 }
 #endif /* CUSTOM_RK */
 

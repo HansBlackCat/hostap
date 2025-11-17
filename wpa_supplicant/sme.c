@@ -2750,6 +2750,16 @@ mscs_fail:
 		}
 	}
 
+#ifdef CUSTOM_RK
+	/* Send EAPOL-Key Message 2 for fast resumption (immediately after Association Request) */
+	if (wpa_s->wpa) {
+		wpa_printf(MSG_DEBUG, "SME: Sending EAPOL-Key Message 2/4 for resumption");
+		if (wpa_supplicant_send_2_of_4_resumption(wpa_s->wpa) < 0) {
+			wpa_printf(MSG_WARNING, "SME: Failed to send Message 2/4 for resumption");
+		}
+	}
+#endif /* CUSTOM_RK */
+
 	if (wpa_drv_associate(wpa_s, &params) < 0) {
 		unsigned int n_failed_links = 0;
 		int i;

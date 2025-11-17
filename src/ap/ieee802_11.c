@@ -4864,6 +4864,44 @@ skip_wpa_ies:
 					sta->wpa_sm->client_hash_secret_len = client_raw_size;
 				}
 
+				/* === PHASE 3: Restore PMK and ANonce for Fast Resumption === */
+
+				/* 1. Restore PMK from ticket to WPA state machine */
+				if (ticket.pmk_size > 0 && ticket.pmk_size <= PMK_LEN_MAX) {
+					os_memcpy(sta->wpa_sm->PMK, ticket.pmk, ticket.pmk_size);
+					sta->wpa_sm->pmk_len = ticket.pmk_size;
+					wpa_printf(MSG_INFO, "RESUMPTION: Restored PMK from ticket (%u bytes)",
+						   ticket.pmk_size);
+					wpa_hexdump_key(MSG_DEBUG, "RESUMPTION: Restored PMK",
+							sta->wpa_sm->PMK, sta->wpa_sm->pmk_len);
+				} else {
+					wpa_printf(MSG_ERROR, "RESUMPTION: Invalid PMK size in ticket: %u",
+						   ticket.pmk_size);
+				}
+
+				/* 2. Restore ANonce from ticket EAPOL-Key Message 1 */
+				os_memcpy(sta->wpa_sm->ANonce, ticket.eapol_message.nonce,
+					  WPA_NONCE_LEN);
+				wpa_printf(MSG_INFO, "RESUMPTION: Restored ANonce from ticket");
+				wpa_hexdump_key(MSG_DEBUG, "RESUMPTION: Restored ANonce",
+						sta->wpa_sm->ANonce, WPA_NONCE_LEN);
+
+				/* 3. Set resumption flag to skip Message 1 transmission */
+				sta->wpa_sm->is_resumption = true;
+				wpa_printf(MSG_INFO, "RESUMPTION: Enabled fast resumption mode");
+
+				/* 4. Set WPA state to PTKCALCNEGOTIATING (waiting for Message 2) */
+				/* This state processes incoming Message 2, calculates PTK, validates MIC */
+				/* After Message 2 is received, it will automatically transition to */
+				/* PTKINITNEGOTIATING to send Message 3 */
+				sta->wpa_sm->wpa_ptk_state = WPA_PTK_PTKCALCNEGOTIATING;
+				wpa_printf(MSG_INFO, "RESUMPTION: Set WPA state to PTKCALCNEGOTIATING");
+
+				/* 5. Mark that PTK initialization has started */
+				sta->wpa_sm->started = 1;
+
+				wpa_printf(MSG_INFO, "=== Fast Resumption initialized successfully ===");
+
 			} else {
 				wpa_printf(MSG_ERROR, "Custom Vendor IE: Failed to parse and decrypt ticket from " MACSTR,
 					   MAC2STR(sta->addr));
