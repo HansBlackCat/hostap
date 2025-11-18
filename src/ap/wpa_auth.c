@@ -5162,7 +5162,9 @@ SM_STATE(WPA_PTK, PTKINITNEGOTIATING)
 				  gtk, gtk_len);
 	}
 
+// TODO: M3 Modified - Commented out for testing vanilla 4-way handshake
 #ifdef CUSTOM_RK
+#if 0
 	// TODO: remove!!!!!!!!!!
 	sm->resumption_ticket_requested = 1;
 
@@ -5194,6 +5196,7 @@ SM_STATE(WPA_PTK, PTKINITNEGOTIATING)
 		wpa_hexdump_key(MSG_DEBUG, "Ticket Encrypted KDE",
 				ticket_encrypted, ticket_encrypted_len);
 	}
+#endif /* #if 0 */
 #endif /* CUSTOM_RK */
 
 	pos = ieee80211w_kde_add(sm, pos);

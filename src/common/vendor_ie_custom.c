@@ -5,6 +5,7 @@
 #include "crypto/aes_wrap.h"
 #include "crypto/random.h"
 #include "crypto/sha256.h"
+#include "crypto/crypto.h"
 #include "resumption_ticket.h"
 #include "vendor_ie_custom.h"
 

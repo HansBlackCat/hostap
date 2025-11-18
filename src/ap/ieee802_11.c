@@ -4774,7 +4774,9 @@ skip_wpa_ies:
 		hostapd_wfa_capab(hapd, sta, elems->wfa_capab,
 				  elems->wfa_capab + elems->wfa_capab_len);
 
+// TODO: M3 Modified - Commented out association vendor IE processing for testing
 #ifdef CUSTOM_RK
+#if 0
 	/* Parse and decrypt custom vendor specific IE from Association Request */
 	if (sta->wpa_sm && !link && hapd->wpa_auth && hapd->wpa_auth->rk) {
 		const u8 *custom_ie;
@@ -4837,36 +4839,39 @@ skip_wpa_ies:
 					sta->wpa_sm->client_hash_secret_len = client_raw_size;
 				}
 
-				/* === PHASE 3: Restore TAN for Fast Resumption === */
+				/* TODO: Enable this when implementing resumption authentication */
+				if (false) {
+					/* === PHASE 3: Restore TAN for Fast Resumption === */
 
-				/* 1. Restore TAN from ticket to WPA state machine */
-				if (ticket.tan_hash_size > 0 && ticket.tan_hash_size <= PMK_LEN_MAX) {
-					os_memcpy(sta->wpa_sm->PMK, ticket.tan, ticket.tan_hash_size);
-					sta->wpa_sm->pmk_len = ticket.tan_hash_size;
-					wpa_printf(MSG_INFO, "RESUMPTION: Restored TAN from ticket (%u bytes)",
-						   ticket.tan_hash_size);
-					wpa_hexdump_key(MSG_DEBUG, "RESUMPTION: Restored TAN",
-							sta->wpa_sm->PMK, sta->wpa_sm->pmk_len);
-				} else {
-					wpa_printf(MSG_ERROR, "RESUMPTION: Invalid TAN size in ticket: %u",
-						   ticket.tan_hash_size);
+					/* 1. Restore TAN from ticket to WPA state machine */
+					if (ticket.tan_hash_size > 0 && ticket.tan_hash_size <= PMK_LEN_MAX) {
+						os_memcpy(sta->wpa_sm->PMK, ticket.tan, ticket.tan_hash_size);
+						sta->wpa_sm->pmk_len = ticket.tan_hash_size;
+						wpa_printf(MSG_INFO, "RESUMPTION: Restored TAN from ticket (%u bytes)",
+							   ticket.tan_hash_size);
+						wpa_hexdump_key(MSG_DEBUG, "RESUMPTION: Restored TAN",
+								sta->wpa_sm->PMK, sta->wpa_sm->pmk_len);
+					} else {
+						wpa_printf(MSG_ERROR, "RESUMPTION: Invalid TAN size in ticket: %u",
+							   ticket.tan_hash_size);
+					}
+
+					/* 2. Set resumption flag to skip Message 1 transmission */
+					sta->wpa_sm->is_resumption = true;
+					wpa_printf(MSG_INFO, "RESUMPTION: Enabled fast resumption mode");
+
+					/* 3. Set WPA state to PTKCALCNEGOTIATING (waiting for Message 2) */
+					/* This state processes incoming Message 2, calculates PTK, validates MIC */
+					/* After Message 2 is received, it will automatically transition to */
+					/* PTKINITNEGOTIATING to send Message 3 */
+					sta->wpa_sm->wpa_ptk_state = WPA_PTK_PTKCALCNEGOTIATING;
+					wpa_printf(MSG_INFO, "RESUMPTION: Set WPA state to PTKCALCNEGOTIATING");
+
+					/* 4. Mark that PTK initialization has started */
+					sta->wpa_sm->started = 1;
+
+					wpa_printf(MSG_INFO, "=== Fast Resumption initialized successfully ===");
 				}
-
-				/* 2. Set resumption flag to skip Message 1 transmission */
-				sta->wpa_sm->is_resumption = true;
-				wpa_printf(MSG_INFO, "RESUMPTION: Enabled fast resumption mode");
-
-				/* 3. Set WPA state to PTKCALCNEGOTIATING (waiting for Message 2) */
-				/* This state processes incoming Message 2, calculates PTK, validates MIC */
-				/* After Message 2 is received, it will automatically transition to */
-				/* PTKINITNEGOTIATING to send Message 3 */
-				sta->wpa_sm->wpa_ptk_state = WPA_PTK_PTKCALCNEGOTIATING;
-				wpa_printf(MSG_INFO, "RESUMPTION: Set WPA state to PTKCALCNEGOTIATING");
-
-				/* 4. Mark that PTK initialization has started */
-				sta->wpa_sm->started = 1;
-
-				wpa_printf(MSG_INFO, "=== Fast Resumption initialized successfully ===");
 
 			} else {
 				wpa_printf(MSG_ERROR, "Custom Vendor IE: Failed to parse and decrypt ticket from " MACSTR,
@@ -4880,6 +4885,7 @@ skip_wpa_ies:
 		wpa_printf(MSG_WARNING, "Custom Vendor IE: RTK not available (wpa_auth=%p, rk=%p)",
 			   hapd->wpa_auth, hapd->wpa_auth ? hapd->wpa_auth->rk : NULL);
 	}
+#endif /* #if 0 */
 #endif /* CUSTOM_RK */
 
 	return WLAN_STATUS_SUCCESS;
