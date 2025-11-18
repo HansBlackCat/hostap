@@ -171,69 +171,34 @@ struct wpabuf * build_custom_vendor_ie(void)
 
 	static const u8 client_raw[] = { 0xca, 0xff, 0xed, 0x20, 0x25};
 	static const u8 client_raw_size = sizeof(client_raw);
-	static const u8 PMKD_encrypted_client_raw_size = TICKET_CLIENT_RAW_ENCRYPTED_SIZE;
-	static const u8 PMKD_encrypted_client_raw[TICKET_CLIENT_RAW_ENCRYPTED_SIZE] = { 0x00 }; /* Example encrypted data */
+	static const u8 PMKD_encrypted_client_raw_size = TICKET_SUPPLICANT_RAW_MAX;
+	static const u8 PMKD_encrypted_client_raw[TICKET_SUPPLICANT_RAW_MAX] = { 0x00 }; /* Example encrypted data */
 
-	/* Client hash from TEST_STA_RAW string */
-	static const u8 client_hash[TICKET_CLIENT_HASH_SIZE] = {
+	/* Supplicant hash from TEST_STA_RAW string */
+	static const u8 supplicant_hash[TICKET_SUPPLICANT_HASH_MAX] = {
 		0x34, 0x4f, 0x71, 0x32, 0x77, 0xa1, 0x56, 0x7c,
 		0xa3, 0xef, 0x11, 0x0c, 0xbd, 0x77, 0xc4, 0xdf,
 		0x01, 0x8a, 0x6a, 0x2c, 0x1d, 0x91, 0x69, 0x26,
 		0x6d, 0xc8, 0xbb, 0xa3, 0x05, 0x10, 0xdb, 0x11
 	}; /* SHA256 hash of "TEST_STA_RAW" */
-	static const u8 client_hash_size = sizeof(client_hash);
+	static const u8 supplicant_hash_size = sizeof(supplicant_hash);
 
-	/* PMK (all zeros for testing) */
-	static const u8 wpa_pmk[PMK_LEN] = { 0x00 };
-	static const u8 wpa_pmk_size = sizeof(wpa_pmk);
+	/* TAN (Ticket Authentication Nonce) - all zeros for testing */
+	static const u8 tan[TICKET_TAN_HASH_MAX] = { 0x00 };
+	static const u8 tan_hash_size = sizeof(tan);
 
-	/* 802.1X Authentication Message fields */
-	static const u8 auth_version = 0x02; /* 802.1X-2004 */
-	static const u8 auth_key = 0x03; /* EAPOL-Key */
-	static const u8 auth_key_descriptor_type = 0x02; /* EAPOL RSN Key */
-	static const u16 auth_key_information = 0x008a; /* Key flags */
-	/* Key Descriptor Version: 2 (AES, HMAC-SHA1 MIC)
-	 * Key Type: 1 (Pairwise)
-	 * Key ACK: 1 (Set)
-	 * Other flags: 0 (Not set)
-	 */
-	static const u16 auth_key_length = 16; /* AES key length */
-	static const u8 auth_replay_counter[TICKET_REPLAY_COUNTER_SIZE] = {
-		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01
-	};
-	static const u8 auth_wpa_key_nonce[TICKET_WPA_NONCE_SIZE] = {
-		0x6a, 0x9e, 0x0d, 0xa6, 0xbf, 0x66, 0xe0, 0x3f,
-		0x74, 0xf0, 0xdf, 0x4d, 0x3c, 0xf9, 0x83, 0xdc,
-		0x50, 0x57, 0xef, 0xf9, 0x64, 0x51, 0x8b, 0xf8,
-		0x18, 0x9a, 0x7a, 0x2d, 0xa9, 0x63, 0x07, 0xe2
-	};
-	static const u8 auth_key_iv[TICKET_KEY_IV_SIZE] = { 0x00 };
-	static const u8 auth_wpa_key_rsc[TICKET_KEY_RSC_SIZE] = { 0x00 };
-	static const u8 auth_wpa_key_id[TICKET_KEY_ID_SIZE] = { 0x00 };
-	static const u8 auth_wpa_key_mic[TICKET_KEY_MIC_SIZE] = { 0x00 };
-	static const u16 auth_wpa_key_data_length = 0; /* No key data */
-
-	/* Calculate auth message size */
-	u16 auth_msg_size = sizeof(auth_key_descriptor_type) +
-			    sizeof(auth_key_information) +
-			    sizeof(auth_key_length) +
-			    sizeof(auth_replay_counter) +
-			    sizeof(auth_wpa_key_nonce) +
-			    sizeof(auth_key_iv) +
-			    sizeof(auth_wpa_key_rsc) +
-			    sizeof(auth_wpa_key_id) +
-			    sizeof(auth_wpa_key_mic) +
-			    sizeof(auth_wpa_key_data_length);
+	/* Handshake Payload (placeholder) */
+	static const u8 handshake_payload[TICKET_HANDSHAKE_PAYLOAD_MAX] = { 0x00 };
+	static const u8 handshake_payload_size = 0; /* Empty for now */
 
 	/* Calculate plaintext ticket size (before encryption) */
-	size_t plaintext_ticket_size = 1 + /* client_hash_size */
-				       client_hash_size +
-				       1 + /* wpa_pmk_size */
-				       wpa_pmk_size +
-				       1 + /* auth_version */
-				       1 + /* auth_key */
-				       2 + /* auth_msg_size */
-				       auth_msg_size;
+	size_t plaintext_ticket_size = 1 + /* ticket_random */
+				       1 + /* supplicant_hash_size */
+				       supplicant_hash_size +
+				       1 + /* tan_hash_size */
+				       tan_hash_size +
+				       1 + /* handshake_payload_size */
+				       handshake_payload_size;
 
 	/* Calculate encrypted ticket size (plaintext + AES-GCM overhead) */
 	ticket_size = plaintext_ticket_size + AES_GCM_OVERHEAD;
@@ -294,46 +259,28 @@ struct wpabuf * build_custom_vendor_ie(void)
 
 	u8 *pos = plaintext_ticket;
 
-	/* Client hash size */
-	*pos++ = client_hash_size;
-	/* Client hash */
-	os_memcpy(pos, client_hash, client_hash_size);
-	pos += client_hash_size;
+	/* Ticket Random */
+	*pos++ = 0x01; /* Placeholder ticket random */
 
-	/* PMK size */
-	*pos++ = wpa_pmk_size;
-	/* PMK */
-	os_memcpy(pos, wpa_pmk, wpa_pmk_size);
-	pos += wpa_pmk_size;
+	/* Supplicant hash size */
+	*pos++ = supplicant_hash_size;
+	/* Supplicant hash */
+	os_memcpy(pos, supplicant_hash, supplicant_hash_size);
+	pos += supplicant_hash_size;
 
-	/* 802.1X Authentication Message */
-	*pos++ = auth_version;
-	*pos++ = auth_key;
+	/* TAN hash size */
+	*pos++ = tan_hash_size;
+	/* TAN */
+	os_memcpy(pos, tan, tan_hash_size);
+	pos += tan_hash_size;
 
-	/* Auth message size (big-endian) */
-	WPA_PUT_BE16(pos, auth_msg_size);
-	pos += 2;
-
-	/* EAPOL-Key frame */
-	*pos++ = auth_key_descriptor_type;
-	WPA_PUT_BE16(pos, auth_key_information);
-	pos += 2;
-	WPA_PUT_BE16(pos, auth_key_length);
-	pos += 2;
-	os_memcpy(pos, auth_replay_counter, sizeof(auth_replay_counter));
-	pos += sizeof(auth_replay_counter);
-	os_memcpy(pos, auth_wpa_key_nonce, sizeof(auth_wpa_key_nonce));
-	pos += sizeof(auth_wpa_key_nonce);
-	os_memcpy(pos, auth_key_iv, sizeof(auth_key_iv));
-	pos += sizeof(auth_key_iv);
-	os_memcpy(pos, auth_wpa_key_rsc, sizeof(auth_wpa_key_rsc));
-	pos += sizeof(auth_wpa_key_rsc);
-	os_memcpy(pos, auth_wpa_key_id, sizeof(auth_wpa_key_id));
-	pos += sizeof(auth_wpa_key_id);
-	os_memcpy(pos, auth_wpa_key_mic, sizeof(auth_wpa_key_mic));
-	pos += sizeof(auth_wpa_key_mic);
-	WPA_PUT_BE16(pos, auth_wpa_key_data_length);
-	pos += 2;
+	/* Handshake Payload size */
+	*pos++ = handshake_payload_size;
+	/* Handshake Payload (if any) */
+	if (handshake_payload_size > 0) {
+		os_memcpy(pos, handshake_payload, handshake_payload_size);
+		pos += handshake_payload_size;
+	}
 
 	wpa_hexdump_key(MSG_DEBUG, "Plaintext Ticket", plaintext_ticket, plaintext_ticket_size);
 
@@ -546,85 +493,53 @@ int parse_and_decrypt_vendor_ie_ticket(const u8 *rtk,
 	/* Parse decrypted ticket */
 	const u8 *ticket_pos = plaintext;
 
-	/* Client hash size */
-	ticket_out->client_hash_size = *ticket_pos++;
-	if (ticket_out->client_hash_size != TICKET_CLIENT_HASH_SIZE) {
-		wpa_printf(MSG_ERROR, "Invalid client hash size: %u (expected %u)",
-			   ticket_out->client_hash_size, TICKET_CLIENT_HASH_SIZE);
+	/* Ticket Random */
+	ticket_out->ticket_random = *ticket_pos++;
+
+	/* Supplicant hash size */
+	ticket_out->supplicant_hash_size = *ticket_pos++;
+	if (ticket_out->supplicant_hash_size != TICKET_SUPPLICANT_HASH_MAX) {
+		wpa_printf(MSG_ERROR, "Invalid supplicant hash size: %u (expected %u)",
+			   ticket_out->supplicant_hash_size, TICKET_SUPPLICANT_HASH_MAX);
 		goto cleanup;
 	}
 
-	/* Client hash */
-	os_memcpy(ticket_out->client_hash, ticket_pos, ticket_out->client_hash_size);
-	ticket_pos += ticket_out->client_hash_size;
+	/* Supplicant hash */
+	os_memcpy(ticket_out->supplicant_hash, ticket_pos, ticket_out->supplicant_hash_size);
+	ticket_pos += ticket_out->supplicant_hash_size;
 
-	/* PMK size */
-	ticket_out->pmk_size = *ticket_pos++;
-	if (ticket_out->pmk_size != PMK_LEN) {
-		wpa_printf(MSG_ERROR, "Invalid PMK size: %u (expected %u)",
-			   ticket_out->pmk_size, PMK_LEN);
+	/* TAN hash size */
+	ticket_out->tan_hash_size = *ticket_pos++;
+	if (ticket_out->tan_hash_size != TICKET_TAN_HASH_MAX) {
+		wpa_printf(MSG_ERROR, "Invalid TAN hash size: %u (expected %u)",
+			   ticket_out->tan_hash_size, TICKET_TAN_HASH_MAX);
 		goto cleanup;
 	}
 
-	/* PMK */
-	os_memcpy(ticket_out->pmk, ticket_pos, ticket_out->pmk_size);
-	ticket_pos += ticket_out->pmk_size;
+	/* TAN */
+	os_memcpy(ticket_out->tan, ticket_pos, ticket_out->tan_hash_size);
+	ticket_pos += ticket_out->tan_hash_size;
 
-	/* 802.1X version */
-	ticket_out->auth_version = *ticket_pos++;
+	/* Handshake Payload size */
+	ticket_out->handshake_payload_size = *ticket_pos++;
 
-	/* 802.1X type */
-	ticket_out->auth_type = *ticket_pos++;
-
-	/* Auth message size (big-endian) */
-	ticket_out->auth_msg_size = WPA_GET_BE16(ticket_pos);
-	ticket_pos += 2;
-
-	/* EAPOL-Key frame */
-	/* Descriptor type */
-	ticket_out->eapol_message.descriptor_type = *ticket_pos++;
-
-	/* Key information (big-endian) */
-	ticket_out->eapol_message.key_information = WPA_GET_BE16(ticket_pos);
-	ticket_pos += 2;
-
-	/* Key length (big-endian) */
-	ticket_out->eapol_message.key_length = WPA_GET_BE16(ticket_pos);
-	ticket_pos += 2;
-
-	/* Replay counter */
-	os_memcpy(ticket_out->eapol_message.replay_counter, ticket_pos, TICKET_REPLAY_COUNTER_SIZE);
-	ticket_pos += TICKET_REPLAY_COUNTER_SIZE;
-
-	/* Nonce */
-	os_memcpy(ticket_out->eapol_message.nonce, ticket_pos, TICKET_WPA_NONCE_SIZE);
-	ticket_pos += TICKET_WPA_NONCE_SIZE;
-
-	/* IV */
-	os_memcpy(ticket_out->eapol_message.iv, ticket_pos, TICKET_KEY_IV_SIZE);
-	ticket_pos += TICKET_KEY_IV_SIZE;
-
-	/* RSC */
-	os_memcpy(ticket_out->eapol_message.rsc, ticket_pos, TICKET_KEY_RSC_SIZE);
-	ticket_pos += TICKET_KEY_RSC_SIZE;
-
-	/* Key ID */
-	os_memcpy(ticket_out->eapol_message.key_id, ticket_pos, TICKET_KEY_ID_SIZE);
-	ticket_pos += TICKET_KEY_ID_SIZE;
-
-	/* MIC */
-	os_memcpy(ticket_out->eapol_message.mic, ticket_pos, TICKET_KEY_MIC_SIZE);
-	ticket_pos += TICKET_KEY_MIC_SIZE;
-
-	/* Key data length (big-endian) */
-	ticket_out->eapol_message.key_data_length = WPA_GET_BE16(ticket_pos);
-	ticket_pos += 2;
+	/* Handshake Payload (if any) */
+	if (ticket_out->handshake_payload_size > 0) {
+		if (ticket_out->handshake_payload_size > TICKET_HANDSHAKE_PAYLOAD_MAX) {
+			wpa_printf(MSG_ERROR, "Handshake payload size too large: %u",
+				   ticket_out->handshake_payload_size);
+			goto cleanup;
+		}
+		os_memcpy(ticket_out->handshake_payload, ticket_pos,
+			  ticket_out->handshake_payload_size);
+		ticket_pos += ticket_out->handshake_payload_size;
+	}
 
 	wpa_printf(MSG_DEBUG, "Successfully parsed and decrypted vendor IE ticket");
-	wpa_hexdump_key(MSG_DEBUG, "Decrypted Client Hash",
-			ticket_out->client_hash, ticket_out->client_hash_size);
-	wpa_hexdump_key(MSG_DEBUG, "Decrypted PMK",
-			ticket_out->pmk, ticket_out->pmk_size);
+	wpa_hexdump_key(MSG_DEBUG, "Decrypted Supplicant Hash",
+			ticket_out->supplicant_hash, ticket_out->supplicant_hash_size);
+	wpa_hexdump_key(MSG_DEBUG, "Decrypted TAN",
+			ticket_out->tan, ticket_out->tan_hash_size);
 
 	ret = 0;
 

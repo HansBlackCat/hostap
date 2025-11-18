@@ -4790,7 +4790,7 @@ skip_wpa_ies:
 				   MAC2STR(sta->addr), ie_len);
 
 			/* Allocate buffers for decrypted data */
-			u8 client_raw[TICKET_CLIENT_RAW_ENCRYPTED_SIZE];
+			u8 client_raw[TICKET_SUPPLICANT_RAW_MAX];
 			u8 client_raw_size = 0;
 			struct resumption_ticket ticket;
 
@@ -4815,46 +4815,19 @@ skip_wpa_ies:
 				/* Print decrypted ticket contents */
 				wpa_printf(MSG_DEBUG, "--- Decrypted Ticket Contents ---");
 
-				wpa_printf(MSG_DEBUG, "Client Hash Size: %u bytes", ticket.client_hash_size);
-				wpa_hexdump_key(MSG_DEBUG, "Client Hash (SHA256)",
-						ticket.client_hash, ticket.client_hash_size);
+				wpa_printf(MSG_DEBUG, "Ticket Random: 0x%02x", ticket.ticket_random);
+				wpa_printf(MSG_DEBUG, "Supplicant Hash Size: %u bytes", ticket.supplicant_hash_size);
+				wpa_hexdump_key(MSG_DEBUG, "Supplicant Hash (SHA256)",
+						ticket.supplicant_hash, ticket.supplicant_hash_size);
 
-				wpa_printf(MSG_DEBUG, "PMK Size: %u bytes", ticket.pmk_size);
-				wpa_hexdump_key(MSG_DEBUG, "PMK", ticket.pmk, ticket.pmk_size);
+				wpa_printf(MSG_DEBUG, "TAN Hash Size: %u bytes", ticket.tan_hash_size);
+				wpa_hexdump_key(MSG_DEBUG, "TAN", ticket.tan, ticket.tan_hash_size);
 
-				wpa_printf(MSG_DEBUG, "802.1X Version: 0x%02x", ticket.auth_version);
-				wpa_printf(MSG_DEBUG, "802.1X Type: 0x%02x", ticket.auth_type);
-				wpa_printf(MSG_DEBUG, "Auth Message Size: %u bytes", ticket.auth_msg_size);
-
-				/* Print EAPOL-Key frame details */
-				wpa_printf(MSG_DEBUG, "--- EAPOL-Key Frame ---");
-				wpa_printf(MSG_DEBUG, "Key Descriptor Type: 0x%02x",
-					   ticket.eapol_message.descriptor_type);
-				wpa_printf(MSG_DEBUG, "Key Information: 0x%04x",
-					   ticket.eapol_message.key_information);
-				wpa_printf(MSG_DEBUG, "Key Length: %u",
-					   ticket.eapol_message.key_length);
-
-				wpa_hexdump(MSG_DEBUG, "Replay Counter",
-					    ticket.eapol_message.replay_counter,
-					    TICKET_REPLAY_COUNTER_SIZE);
-				wpa_hexdump_key(MSG_DEBUG, "Key Nonce",
-						ticket.eapol_message.nonce,
-						TICKET_WPA_NONCE_SIZE);
-				wpa_hexdump(MSG_DEBUG, "Key IV",
-					    ticket.eapol_message.iv,
-					    TICKET_KEY_IV_SIZE);
-				wpa_hexdump(MSG_DEBUG, "Key RSC",
-					    ticket.eapol_message.rsc,
-					    TICKET_KEY_RSC_SIZE);
-				wpa_hexdump(MSG_DEBUG, "Key ID",
-					    ticket.eapol_message.key_id,
-					    TICKET_KEY_ID_SIZE);
-				wpa_hexdump(MSG_DEBUG, "Key MIC",
-					    ticket.eapol_message.mic,
-					    TICKET_KEY_MIC_SIZE);
-				wpa_printf(MSG_DEBUG, "Key Data Length: %u",
-					   ticket.eapol_message.key_data_length);
+				wpa_printf(MSG_DEBUG, "Handshake Payload Size: %u bytes", ticket.handshake_payload_size);
+				if (ticket.handshake_payload_size > 0) {
+					wpa_hexdump(MSG_DEBUG, "Handshake Payload",
+						    ticket.handshake_payload, ticket.handshake_payload_size);
+				}
 
 				wpa_printf(MSG_INFO, "=== Resumption ticket decryption successful ===");
 
@@ -4864,40 +4837,33 @@ skip_wpa_ies:
 					sta->wpa_sm->client_hash_secret_len = client_raw_size;
 				}
 
-				/* === PHASE 3: Restore PMK and ANonce for Fast Resumption === */
+				/* === PHASE 3: Restore TAN for Fast Resumption === */
 
-				/* 1. Restore PMK from ticket to WPA state machine */
-				if (ticket.pmk_size > 0 && ticket.pmk_size <= PMK_LEN_MAX) {
-					os_memcpy(sta->wpa_sm->PMK, ticket.pmk, ticket.pmk_size);
-					sta->wpa_sm->pmk_len = ticket.pmk_size;
-					wpa_printf(MSG_INFO, "RESUMPTION: Restored PMK from ticket (%u bytes)",
-						   ticket.pmk_size);
-					wpa_hexdump_key(MSG_DEBUG, "RESUMPTION: Restored PMK",
+				/* 1. Restore TAN from ticket to WPA state machine */
+				if (ticket.tan_hash_size > 0 && ticket.tan_hash_size <= PMK_LEN_MAX) {
+					os_memcpy(sta->wpa_sm->PMK, ticket.tan, ticket.tan_hash_size);
+					sta->wpa_sm->pmk_len = ticket.tan_hash_size;
+					wpa_printf(MSG_INFO, "RESUMPTION: Restored TAN from ticket (%u bytes)",
+						   ticket.tan_hash_size);
+					wpa_hexdump_key(MSG_DEBUG, "RESUMPTION: Restored TAN",
 							sta->wpa_sm->PMK, sta->wpa_sm->pmk_len);
 				} else {
-					wpa_printf(MSG_ERROR, "RESUMPTION: Invalid PMK size in ticket: %u",
-						   ticket.pmk_size);
+					wpa_printf(MSG_ERROR, "RESUMPTION: Invalid TAN size in ticket: %u",
+						   ticket.tan_hash_size);
 				}
 
-				/* 2. Restore ANonce from ticket EAPOL-Key Message 1 */
-				os_memcpy(sta->wpa_sm->ANonce, ticket.eapol_message.nonce,
-					  WPA_NONCE_LEN);
-				wpa_printf(MSG_INFO, "RESUMPTION: Restored ANonce from ticket");
-				wpa_hexdump_key(MSG_DEBUG, "RESUMPTION: Restored ANonce",
-						sta->wpa_sm->ANonce, WPA_NONCE_LEN);
-
-				/* 3. Set resumption flag to skip Message 1 transmission */
+				/* 2. Set resumption flag to skip Message 1 transmission */
 				sta->wpa_sm->is_resumption = true;
 				wpa_printf(MSG_INFO, "RESUMPTION: Enabled fast resumption mode");
 
-				/* 4. Set WPA state to PTKCALCNEGOTIATING (waiting for Message 2) */
+				/* 3. Set WPA state to PTKCALCNEGOTIATING (waiting for Message 2) */
 				/* This state processes incoming Message 2, calculates PTK, validates MIC */
 				/* After Message 2 is received, it will automatically transition to */
 				/* PTKINITNEGOTIATING to send Message 3 */
 				sta->wpa_sm->wpa_ptk_state = WPA_PTK_PTKCALCNEGOTIATING;
 				wpa_printf(MSG_INFO, "RESUMPTION: Set WPA state to PTKCALCNEGOTIATING");
 
-				/* 5. Mark that PTK initialization has started */
+				/* 4. Mark that PTK initialization has started */
 				sta->wpa_sm->started = 1;
 
 				wpa_printf(MSG_INFO, "=== Fast Resumption initialized successfully ===");
