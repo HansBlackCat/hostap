@@ -282,6 +282,10 @@ void wpa_sm_set_driver_bss_selection(struct wpa_sm *sm,
 				     bool driver_bss_selection);
 bool wpa_sm_uses_spp_amsdu(struct wpa_sm *sm);
 
+#ifdef CUSTOM_RK
+int wpa_supplicant_send_2_of_4_resumption(struct wpa_sm *sm);
+#endif /* CUSTOM_RK */
+
 #else /* CONFIG_NO_WPA */
 
 static inline struct wpa_sm * wpa_sm_init(struct wpa_sm_ctx *ctx)

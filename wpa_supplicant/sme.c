@@ -32,7 +32,7 @@
 #include "scan.h"
 #include "sme.h"
 #include "hs20_supplicant.h"
-#include "vendor_ie_custom.h"
+#include "common/vendor_ie_custom.h"
 
 #define SME_AUTH_TIMEOUT 5
 #define SME_ASSOC_TIMEOUT 5
@@ -2749,6 +2749,16 @@ mscs_fail:
 				   MAC2STR(wpa_s->links[i].bssid));
 		}
 	}
+
+#ifdef CUSTOM_RK
+	/* Send EAPOL-Key Message 2 for fast resumption (immediately after Association Request) */
+	if (wpa_s->wpa) {
+		wpa_printf(MSG_DEBUG, "SME: Sending EAPOL-Key Message 2/4 for resumption");
+		if (wpa_supplicant_send_2_of_4_resumption(wpa_s->wpa) < 0) {
+			wpa_printf(MSG_WARNING, "SME: Failed to send Message 2/4 for resumption");
+		}
+	}
+#endif /* CUSTOM_RK */
 
 	if (wpa_drv_associate(wpa_s, &params) < 0) {
 		unsigned int n_failed_links = 0;

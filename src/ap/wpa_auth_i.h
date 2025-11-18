@@ -39,6 +39,14 @@ struct wpa_state_machine {
 		WPA_PTK_GROUP_KEYERROR
 	} wpa_ptk_group_state;
 
+#ifdef CUSTOM_RK
+    u8 client_hash_secret[WPA_CLIENT_HASH_SECRET];
+    u8 rk[WPA_RK_MAX_LEN];
+    size_t rk_len;
+    size_t client_hash_secret_len;
+    bool is_resumption;  /* Fast resumption mode (skip Message 1) */
+#endif /* CUSTOM_RK */
+
 	bool Init;
 	bool DeauthenticationRequest;
 	bool AuthenticationRequest;
@@ -104,6 +112,10 @@ struct wpa_state_machine {
 #ifdef CONFIG_OCV
 	int ocv_enabled;
 #endif /* CONFIG_OCV */
+
+#ifdef CUSTOM_RK
+	unsigned int resumption_ticket_requested:1;
+#endif /* CUSTOM_RK */
 
 	u8 req_replay_counter[WPA_REPLAY_COUNTER_LEN];
 	int req_replay_counter_used;
@@ -229,12 +241,16 @@ struct wpa_group {
 	/* Number of references except those in struct wpa_group->next */
 	unsigned int references;
 	unsigned int num_setup_iface;
+};
 
 #ifdef CUSTOM_RK
-    int GN_rk, GM_rk;
-    u8 RK[2][WPA_RK_MAX_LEN];
-#endif /* CUSTOM_RK */
+// PLACEHOLDER
+struct wpa_rk {
+    u8 rmk[WPA_RK_MAX_LEN];
+    u8 rtk[WPA_RK_MAX_LEN];
+    u8 rak[WPA_RK_MAX_LEN];
 };
+#endif /* CUSTOM_RK */
 
 
 struct wpa_ft_pmk_cache;
@@ -280,6 +296,10 @@ struct wpa_authenticator {
 	u8 link_id;
 	bool primary_auth;
 #endif /* CONFIG_IEEE80211BE */
+
+#ifdef CUSTOM_RK
+	struct wpa_rk *rk;
+#endif /* CUSTOM_RK */
 };
 
 

@@ -25,6 +25,9 @@ CFLAGS += $(EXTRA_CFLAGS)
 CFLAGS += -I$(abspath ../src)
 CFLAGS += -I$(abspath ../src/utils)
 
+CFLAGS += -DCUSTOM_RK
+export CFLAGS
+
 export BINDIR ?= /usr/local/bin/
 
 ifndef CONFIG_NO_GITVER
@@ -163,6 +166,8 @@ OBJS += ../src/utils/crc32.o
 OBJS += ../src/common/ieee802_11_common.o
 OBJS += ../src/common/wpa_common.o
 OBJS += ../src/common/hw_features_common.o
+OBJS += ../src/common/resumption_ticket.o
+OBJS += ../src/common/vendor_ie_custom.o
 
 OBJS += ../src/eapol_auth/eapol_auth_sm.o
 
@@ -952,6 +957,8 @@ endif
 ifdef NEED_AES_CTR
 AESOBJS += ../src/crypto/aes-ctr.o
 endif
+# Add AES-GCM for ticket encryption
+AESOBJS += ../src/crypto/aes-gcm.o
 ifdef NEED_AES_ENCBLOCK
 AESOBJS += ../src/crypto/aes-encblock.o
 endif

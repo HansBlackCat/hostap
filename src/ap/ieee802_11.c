@@ -27,6 +27,10 @@
 #include "common/wpa_ctrl.h"
 #include "common/ptksa_cache.h"
 #include "common/nan_de.h"
+#ifdef CUSTOM_RK
+#include "common/vendor_ie_custom.h"
+#include "common/resumption_ticket.h"
+#endif /* CUSTOM_RK */
 #include "radius/radius.h"
 #include "radius/radius_client.h"
 #include "p2p/p2p.h"
@@ -60,6 +64,9 @@
 #include "nan_usd_ap.h"
 #include "pasn/pasn_common.h"
 
+#ifdef CUSTOM_RK
+#include "wpa_auth_i.h" 
+#endif
 
 #ifdef CONFIG_FILS
 static struct wpabuf *
@@ -4767,6 +4774,120 @@ skip_wpa_ies:
 		hostapd_wfa_capab(hapd, sta, elems->wfa_capab,
 				  elems->wfa_capab + elems->wfa_capab_len);
 
+// TODO: M3 Modified - Commented out association vendor IE processing for testing
+#ifdef CUSTOM_RK
+#if 0
+	/* Parse and decrypt custom vendor specific IE from Association Request */
+	if (sta->wpa_sm && !link && hapd->wpa_auth && hapd->wpa_auth->rk) {
+		const u8 *custom_ie;
+		u32 vendor_type = OUI_CUSTOM_RK;  /* OUI: 0x027a8b, Type: 0xff */
+
+		custom_ie = get_vendor_ie(ies, ies_len, vendor_type);
+		if (custom_ie) {
+			/* IE format: ID(1) + Length(1) + OUI(3) + Type(1) + Data(variable) */
+			u8 ie_len = custom_ie[1];
+			size_t ie_total_len = 2 + ie_len;  /* ID + Length + payload */
+
+			wpa_printf(MSG_DEBUG, "Custom Vendor IE: Found vendor IE from " MACSTR " (length: %u)",
+				   MAC2STR(sta->addr), ie_len);
+
+			/* Allocate buffers for decrypted data */
+			u8 client_raw[TICKET_SUPPLICANT_RAW_MAX];
+			u8 client_raw_size = 0;
+			struct resumption_ticket ticket;
+
+			os_memset(&ticket, 0, sizeof(ticket));
+
+			/* Parse and decrypt vendor IE ticket using RTK from authenticator */
+			if (parse_and_decrypt_vendor_ie_ticket(
+				    hapd->wpa_auth->rk->rtk,  /* RTK from authenticator */
+				    custom_ie,                 /* IE data (including ID and Length) */
+				    ie_total_len,              /* Total IE length */
+				    client_raw,                /* Output: PMKD-encrypted client raw */
+				    &client_raw_size,          /* Output: client raw size */
+				    &ticket) == 0) {           /* Output: decrypted ticket */
+
+				wpa_printf(MSG_INFO, "=== Successfully decrypted resumption ticket from " MACSTR " ===",
+					   MAC2STR(sta->addr));
+
+				/* Print PMKD-encrypted client raw */
+				wpa_printf(MSG_DEBUG, "PMKD-Encrypted Client Raw Size: %u bytes", client_raw_size);
+				wpa_hexdump(MSG_DEBUG, "PMKD-Encrypted Client Raw", client_raw, client_raw_size);
+
+				/* Print decrypted ticket contents */
+				wpa_printf(MSG_DEBUG, "--- Decrypted Ticket Contents ---");
+
+				wpa_printf(MSG_DEBUG, "Ticket Random: 0x%02x", ticket.ticket_random);
+				wpa_printf(MSG_DEBUG, "Supplicant Hash Size: %u bytes", ticket.supplicant_hash_size);
+				wpa_hexdump_key(MSG_DEBUG, "Supplicant Hash (SHA256)",
+						ticket.supplicant_hash, ticket.supplicant_hash_size);
+
+				wpa_printf(MSG_DEBUG, "TAN Hash Size: %u bytes", ticket.tan_hash_size);
+				wpa_hexdump_key(MSG_DEBUG, "TAN", ticket.tan, ticket.tan_hash_size);
+
+				wpa_printf(MSG_DEBUG, "Handshake Payload Size: %u bytes", ticket.handshake_payload_size);
+				if (ticket.handshake_payload_size > 0) {
+					wpa_hexdump(MSG_DEBUG, "Handshake Payload",
+						    ticket.handshake_payload, ticket.handshake_payload_size);
+				}
+
+				wpa_printf(MSG_INFO, "=== Resumption ticket decryption successful ===");
+
+				/* Store client raw in wpa_state_machine for future use */
+				if (client_raw_size <= WPA_CLIENT_HASH_SECRET) {
+					os_memcpy(sta->wpa_sm->client_hash_secret, client_raw, client_raw_size);
+					sta->wpa_sm->client_hash_secret_len = client_raw_size;
+				}
+
+				/* TODO: Enable this when implementing resumption authentication */
+				if (false) {
+					/* === PHASE 3: Restore TAN for Fast Resumption === */
+
+					/* 1. Restore TAN from ticket to WPA state machine */
+					if (ticket.tan_hash_size > 0 && ticket.tan_hash_size <= PMK_LEN_MAX) {
+						os_memcpy(sta->wpa_sm->PMK, ticket.tan, ticket.tan_hash_size);
+						sta->wpa_sm->pmk_len = ticket.tan_hash_size;
+						wpa_printf(MSG_INFO, "RESUMPTION: Restored TAN from ticket (%u bytes)",
+							   ticket.tan_hash_size);
+						wpa_hexdump_key(MSG_DEBUG, "RESUMPTION: Restored TAN",
+								sta->wpa_sm->PMK, sta->wpa_sm->pmk_len);
+					} else {
+						wpa_printf(MSG_ERROR, "RESUMPTION: Invalid TAN size in ticket: %u",
+							   ticket.tan_hash_size);
+					}
+
+					/* 2. Set resumption flag to skip Message 1 transmission */
+					sta->wpa_sm->is_resumption = true;
+					wpa_printf(MSG_INFO, "RESUMPTION: Enabled fast resumption mode");
+
+					/* 3. Set WPA state to PTKCALCNEGOTIATING (waiting for Message 2) */
+					/* This state processes incoming Message 2, calculates PTK, validates MIC */
+					/* After Message 2 is received, it will automatically transition to */
+					/* PTKINITNEGOTIATING to send Message 3 */
+					sta->wpa_sm->wpa_ptk_state = WPA_PTK_PTKCALCNEGOTIATING;
+					wpa_printf(MSG_INFO, "RESUMPTION: Set WPA state to PTKCALCNEGOTIATING");
+
+					/* 4. Mark that PTK initialization has started */
+					sta->wpa_sm->started = 1;
+
+					wpa_printf(MSG_INFO, "=== Fast Resumption initialized successfully ===");
+				}
+
+			} else {
+				wpa_printf(MSG_ERROR, "Custom Vendor IE: Failed to parse and decrypt ticket from " MACSTR,
+					   MAC2STR(sta->addr));
+			}
+		} else {
+			wpa_printf(MSG_DEBUG, "Custom Vendor IE: No vendor IE found from " MACSTR,
+				   MAC2STR(sta->addr));
+		}
+	} else if (sta->wpa_sm && !link) {
+		wpa_printf(MSG_WARNING, "Custom Vendor IE: RTK not available (wpa_auth=%p, rk=%p)",
+			   hapd->wpa_auth, hapd->wpa_auth ? hapd->wpa_auth->rk : NULL);
+	}
+#endif /* #if 0 */
+#endif /* CUSTOM_RK */
+
 	return WLAN_STATUS_SUCCESS;
 }
 
@@ -5510,6 +5631,53 @@ rsnxe_done:
 		p += wpabuf_len(hapd->conf->assocresp_elements);
 	}
 
+    wpa_printf(MSG_DEBUG, "Startomg CUSTOM_RK");
+#ifdef CUSTOM_RK
+	/* Echo client vendor specific IE with incremented payload */
+	wpa_printf(MSG_DEBUG, "Custom Vendor IE: send_assoc_resp called (sta=%p, status=%u)",
+		   sta, status_code);
+
+	if (sta) {
+		wpa_printf(MSG_DEBUG, "Custom Vendor IE: sta->wpa_sm=%p", sta->wpa_sm);
+		if (sta->wpa_sm) {
+			wpa_printf(MSG_DEBUG, "Custom Vendor IE: client_hash_secret_len=%zu",
+				   sta->wpa_sm->client_hash_secret_len);
+		}
+	}
+
+	if (sta && sta->wpa_sm && sta->wpa_sm->client_hash_secret_len > 0 &&
+	    status_code == WLAN_STATUS_SUCCESS) {
+		u8 incremented_payload[WPA_CLIENT_HASH_SECRET];
+		size_t i;
+
+		wpa_printf(MSG_DEBUG, "Custom Vendor IE: All conditions met, processing echo");
+		wpa_hexdump(MSG_DEBUG, "Custom Vendor IE: Original data from state machine",
+			    sta->wpa_sm->client_hash_secret, sta->wpa_sm->client_hash_secret_len);
+
+		/* Increment each byte by 1 */
+		for (i = 0; i < sta->wpa_sm->client_hash_secret_len; i++) {
+			incremented_payload[i] = sta->wpa_sm->client_hash_secret[i] + 1;
+		}
+
+		/* Add vendor specific IE */
+		*p++ = WLAN_EID_VENDOR_SPECIFIC;  /* Element ID: 221 */
+		*p++ = 4 + sta->wpa_sm->client_hash_secret_len;  /* Length: OUI(3) + Type(1) + Data */
+		*p++ = 0x02;  /* OUI byte 1 */
+		*p++ = 0x7a;  /* OUI byte 2 */
+		*p++ = 0x8b;  /* OUI byte 3 */
+		*p++ = 0xff;  /* Type */
+		os_memcpy(p, incremented_payload, sta->wpa_sm->client_hash_secret_len);
+		p += sta->wpa_sm->client_hash_secret_len;
+
+		wpa_printf(MSG_DEBUG, "Custom Vendor IE: Sent %zu bytes (incremented) to " MACSTR,
+			   sta->wpa_sm->client_hash_secret_len, MAC2STR(sta->addr));
+		wpa_hexdump(MSG_DEBUG, "Custom Vendor IE: Response payload",
+			    incremented_payload, sta->wpa_sm->client_hash_secret_len);
+	} else {
+		wpa_printf(MSG_DEBUG, "Custom Vendor IE: Conditions not met, skipping echo");
+	}
+#endif /* CUSTOM_RK */
+
 	send_len += p - reply->u.assoc_resp.variable;
 
 #ifdef CONFIG_FILS
@@ -5781,6 +5949,39 @@ static void handle_assoc(struct hostapd_data *hapd,
 
 	sta = ap_get_sta(hapd, mgmt->sa);
 
+#ifdef CUSTOM_RK
+    wpa_printf(MSG_DEBUG, "CUSTOM_RK defined - here is for processing association");
+// If proper tivket given, then AP should be answer
+#ifndef CUSTOM_RK_NO_VERBOSE
+    wpa_printf(MSG_DEBUG, "Starting CUSTOM_RK processing");
+    // Debug print all innate date in sta_sm structure
+    if (sta) {
+        wpa_printf(MSG_DEBUG, "Custom RK: Station info:");
+        wpa_printf(MSG_DEBUG, "Custom RK: sta->addr=" MACSTR, MAC2STR(sta->addr));
+        wpa_printf(MSG_DEBUG, "Custom RK: sta->aid=%d", sta->aid);
+        wpa_printf(MSG_DEBUG, "Custom RK: sta->flags=0x%x", sta->flags);
+        wpa_printf(MSG_DEBUG, "Custom RK: sta->auth_alg=%d", sta->auth_alg);
+        wpa_printf(MSG_DEBUG, "Custom RK: sta->capability=0x%x", sta->capability);
+        wpa_printf(MSG_DEBUG, "Custom RK: sta->listen_interval=%d", sta->listen_interval);
+        wpa_printf(MSG_DEBUG, "Custom RK: sta->supported_rates_len=%d", sta->supported_rates_len);
+        wpa_printf(MSG_DEBUG, "Custom RK: sta->last_seq_ctrl=0x%x", sta->last_seq_ctrl);
+        wpa_printf(MSG_DEBUG, "Custom RK: sta->last_subtype=0x%x", sta->last_subtype);
+        wpa_printf(MSG_DEBUG, "Custom RK: sta->added_unassoc=%d", sta->added_unassoc);
+        wpa_printf(MSG_DEBUG, "Custom RK: sta->wpa_sm=%p", sta->wpa_sm);
+        if (sta->wpa_sm) {
+            wpa_printf(MSG_DEBUG, "Custom RK: sta->wpa_sm->client_hash_secret_len=%zu",
+                       sta->wpa_sm->client_hash_secret_len);
+            wpa_hexdump(MSG_DEBUG, "Custom RK: sta->wpa_sm->client_hash_secret",
+                        sta->wpa_sm->client_hash_secret, sta->wpa_sm->client_hash_secret_len);
+        }
+    } else {
+        wpa_printf(MSG_DEBUG, "Custom RK: No sta information available");
+    }
+#endif /* CUSTOM_RK_NO_VERBOSE */
+
+
+#endif /* CUSTOM_RK */
+    
 #ifdef CONFIG_IEEE80211BE
 	/*
 	 * It is possible that the association frame is from an associated

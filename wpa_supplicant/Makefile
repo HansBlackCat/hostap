@@ -50,6 +50,9 @@ CFLAGS += $(EXTRA_CFLAGS)
 CFLAGS += -I$(abspath ../src)
 CFLAGS += -I$(abspath ../src/utils)
 
+CFLAGS += -DCUSTOM_RK
+export CFLAGS
+
 ifndef CONFIG_NO_GITVER
 # Add VERSION_STR postfix for builds from a git repository
 ifeq ($(wildcard ../.git),../.git)
@@ -1459,6 +1462,8 @@ endif
 ifdef NEED_AES_ENCBLOCK
 AESOBJS += ../src/crypto/aes-encblock.o
 endif
+# Add AES-GCM for ticket encryption
+AESOBJS += ../src/crypto/aes-gcm.o
 NEED_AES_ENC=y
 ifneq ($(CONFIG_TLS), openssl)
 ifneq ($(CONFIG_TLS), linux)
@@ -1795,7 +1800,8 @@ endif
 
 OBJS += ../src/common/ieee802_11_common.o
 OBJS += ../src/common/hw_features_common.o
-OBJS += vendor_ie_custom.o
+OBJS += ../src/common/resumption_ticket.o
+OBJS += ../src/common/vendor_ie_custom.o
 
 ifdef NEED_EAP_COMMON
 OBJS += ../src/eap_common/eap_common.o

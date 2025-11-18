@@ -39,7 +39,7 @@ cat /tmp/hostapd.conf
 
 # Start services
 echo "Starting hostapd..."
-/usr/local/bin/hostapd /tmp/hostapd.conf &
+/usr/local/bin/hostapd -d -t /tmp/hostapd.conf &
 HOSTAPD_PID=$!
 
 sleep 3

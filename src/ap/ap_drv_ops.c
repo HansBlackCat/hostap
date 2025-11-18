@@ -74,7 +74,7 @@ static int add_buf_data(struct wpabuf **dst, const u8 *data, size_t len)
 
 //     *eid++ = WLAN_EID_VENDOR_SPECIFIC;
 //     *eid++ = 4;
-//     *eid++ = 0x02; // OUI 0x02718b
+//     *eid++ = 0x02; // OUI 0x027a8b
 //     *eid++ = 0x71;
 //     *eid++ = 0x8b;
 //     *eid++ = 0xff; // OUI Type    
